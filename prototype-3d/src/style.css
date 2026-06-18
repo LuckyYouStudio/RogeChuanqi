@@ -1,0 +1,488 @@
+:root {
+  --ink: #e9ffe9;
+  --jade: #6fe39a;
+  --gold: #ffd166;
+  --panel: rgba(10, 22, 17, 0.86);
+  --border: rgba(120, 220, 150, 0.28);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body, #app {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #09110e;
+  font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  color: var(--ink);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+canvas { display: block; }
+
+.hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* 顶部状态条 */
+.topbar {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 14px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  backdrop-filter: blur(4px);
+  font-size: 13px;
+}
+.hpwrap { display: flex; align-items: center; gap: 8px; }
+.hpbar {
+  width: 150px; height: 14px;
+  background: rgba(255, 80, 80, 0.18);
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  border-radius: 8px; overflow: hidden;
+}
+.hpfill {
+  height: 100%; width: 100%;
+  background: linear-gradient(90deg, #ff5e5e, #ff9b6b);
+  transition: width 0.12s linear;
+}
+.stat { display: flex; flex-direction: column; align-items: center; min-width: 44px; }
+.stat b { font-size: 10px; opacity: 0.6; font-weight: 500; }
+.stat span { font-size: 16px; color: var(--gold); font-weight: 700; }
+
+/* 经验条 */
+.xpbar {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 5px;
+  background: rgba(110, 180, 255, 0.15);
+}
+.xpfill {
+  height: 100%; width: 0;
+  background: linear-gradient(90deg, #6db5ff, #b9e3ff);
+  transition: width 0.15s linear;
+}
+
+/* 羁绊提示 */
+.synergy {
+  position: absolute;
+  top: 64px; left: 50%;
+  transform: translateX(-50%);
+  font-size: 12px;
+  letter-spacing: 1px;
+  color: var(--jade);
+  text-shadow: 0 0 8px rgba(80, 200, 130, 0.5);
+}
+
+/* 飘字 */
+.floater {
+  position: fixed;
+  transform: translate(-50%, -50%);
+  font-size: 15px;
+  font-weight: 700;
+  pointer-events: none;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
+  z-index: 12;
+}
+
+/* 警示 */
+.warn {
+  position: fixed;
+  top: 32%; left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--gold);
+  text-shadow: 0 0 18px rgba(255, 120, 60, 0.8);
+  opacity: 0;
+  transition: all 0.4s cubic-bezier(0.2, 1.4, 0.4, 1);
+  z-index: 14;
+  pointer-events: none;
+}
+.warn.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+
+/* 通用遮罩 */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(5, 12, 9, 0.72);
+  backdrop-filter: blur(3px);
+  pointer-events: auto;
+  z-index: 20;
+}
+.overlay.visible { display: flex; }
+
+.card {
+  width: min(86vw, 420px);
+  padding: 30px 26px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.card h1 {
+  font-size: 30px;
+  color: var(--jade);
+  letter-spacing: 4px;
+  text-shadow: 0 0 20px rgba(80, 220, 130, 0.5);
+  margin-bottom: 16px;
+}
+.card p { font-size: 14px; line-height: 1.7; opacity: 0.85; margin-bottom: 12px; }
+.card .hint { font-size: 12px; opacity: 0.55; }
+.card button {
+  margin-top: 16px;
+  padding: 13px 40px;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #08140d;
+  background: linear-gradient(135deg, var(--jade), var(--gold));
+  border: none;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.2s;
+  box-shadow: 0 6px 20px rgba(110, 220, 150, 0.35);
+}
+.card button:active { transform: scale(0.96); }
+.card button.ghost {
+  display: block;
+  margin: 12px auto 0;
+  padding: 9px 28px;
+  font-size: 14px;
+  color: var(--jade);
+  background: transparent;
+  border: 1px solid var(--border);
+  box-shadow: none;
+}
+
+/* ---------- 洞府市集 ---------- */
+.shop-box {
+  width: min(96vw, 860px);
+  max-height: 92vh;
+  overflow-y: auto;
+  padding: 20px 22px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.shop-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 6px; }
+.shop-title { font-size: 20px; font-weight: 800; color: var(--gold); letter-spacing: 2px; }
+.shop-stones { font-size: 16px; }
+.shop-stones b { color: var(--gold); font-size: 20px; }
+.shop-swaphint {
+  font-size: 13px; color: var(--gold); min-height: 0; margin: 0;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.shop-swaphint.active { opacity: 1; pointer-events: auto; cursor: pointer; min-height: 20px; margin: 4px 0 8px; }
+
+.shop-offers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.offer {
+  display: flex; flex-direction: column;
+  padding: 12px;
+  background: rgba(16, 30, 22, 0.9);
+  border: 2px solid var(--border);
+  border-radius: 12px;
+}
+.offer-top { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; }
+.offer-kind { padding: 1px 8px; border-radius: 6px; font-weight: 700; }
+.k-treasure { background: rgba(120, 170, 255, 0.18); color: #9cc6ff; }
+.k-art { background: rgba(150, 230, 170, 0.18); color: #9be7ad; }
+.offer-name { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+.offer-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 6px; min-height: 18px; }
+.offer-tags span {
+  font-size: 11px; padding: 1px 7px; border-radius: 7px;
+  background: rgba(120, 170, 255, 0.15); border: 1px solid rgba(120, 170, 255, 0.3);
+}
+.offer-desc { font-size: 12px; opacity: 0.72; line-height: 1.4; margin-bottom: 4px; }
+.offer-mod { font-size: 11px; color: var(--jade); margin-bottom: 10px; min-height: 14px; }
+.offer-buy {
+  margin-top: auto;
+  padding: 8px; font-size: 13px; font-weight: 700;
+  color: #08140d; background: linear-gradient(135deg, var(--jade), var(--gold));
+  border: none; border-radius: 9px; cursor: pointer; pointer-events: auto;
+}
+.offer-buy:disabled { background: #2c3a30; color: #6f7d72; cursor: not-allowed; }
+
+.shop-equipped { margin-bottom: 14px; }
+.shop-equipped-label { font-size: 12px; opacity: 0.8; margin-bottom: 6px; }
+.shop-equipped-label .dim { opacity: 0.7; margin-left: 8px; }
+.shop-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.shop-actions { display: flex; gap: 12px; justify-content: center; }
+.shop-actions button {
+  padding: 11px 26px; font-size: 15px; font-weight: 700; letter-spacing: 1px;
+  border: 1px solid var(--border); border-radius: 11px; cursor: pointer; pointer-events: auto;
+  background: rgba(20, 36, 26, 0.9); color: var(--ink);
+}
+.shop-actions button.primary {
+  border: none; color: #08140d;
+  background: linear-gradient(135deg, var(--jade), var(--gold));
+}
+
+/* ---------- 法宝栏（底部常驻 + 市集内） ---------- */
+.treasure-bar {
+  position: absolute;
+  bottom: 10px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 5px;
+  padding: 5px 8px;
+  background: rgba(10, 22, 17, 0.6);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  pointer-events: none;
+}
+.tslot {
+  width: 58px; height: 46px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(120, 220, 150, 0.18);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  font-size: 10px; overflow: hidden;
+}
+.tslot.filled { background: rgba(20, 36, 26, 0.85); }
+.tslot.swap { cursor: pointer; pointer-events: auto; border-style: dashed; border-color: var(--gold); }
+.tslot.swap:hover { background: rgba(60, 50, 20, 0.9); }
+.tslot-name { font-weight: 700; line-height: 1.1; text-align: center; }
+.tslot-tags { font-size: 9px; opacity: 0.7; }
+.tslot-empty { opacity: 0.35; }
+.tslot-star { font-size: 8px; color: var(--gold); line-height: 1; height: 9px; }
+.bag-star { color: var(--gold); font-size: 11px; }
+.shop-slots .tslot { pointer-events: auto; }
+
+/* ---------- 功法条 ---------- */
+.arts-strip {
+  position: absolute;
+  top: 86px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-wrap: wrap; gap: 4px; justify-content: center;
+  max-width: 92vw;
+}
+.art-chip {
+  font-size: 11px; padding: 1px 8px; border-radius: 7px;
+  background: rgba(150, 230, 170, 0.14);
+  border: 1px solid rgba(150, 230, 170, 0.28);
+  color: #bdeccb;
+}
+
+/* 虚拟摇杆 */
+.joystick {
+  position: fixed;
+  width: 120px; height: 120px;
+  border-radius: 50%;
+  background: rgba(120, 220, 150, 0.08);
+  border: 2px solid rgba(120, 220, 150, 0.25);
+  display: none;
+  z-index: 15;
+  pointer-events: none;
+}
+.joystick.active { display: block; }
+.stick {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 52px; height: 52px;
+  margin: -26px 0 0 -26px;
+  border-radius: 50%;
+  background: rgba(120, 220, 150, 0.35);
+  border: 2px solid rgba(160, 255, 190, 0.6);
+}
+
+/* 战斗中图鉴按钮 */
+.codex-fab {
+  position: absolute;
+  top: 12px; right: 12px;
+  padding: 7px 13px;
+  font-size: 12px; font-weight: 700;
+  color: var(--jade);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 12;
+}
+.codex-fab:active { transform: scale(0.94); }
+
+/* 图鉴内羁绊效果 */
+.codex-syn {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  background: rgba(8, 18, 13, 0.85);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.codex-syn-h {
+  font-size: 12px; font-weight: 700; color: var(--gold);
+  margin-right: 4px;
+}
+.codex-syn-tier {
+  font-size: 11px; line-height: 1.5;
+  padding: 2px 9px; border-radius: 8px;
+  background: rgba(120, 220, 150, 0.1);
+  border: 1px solid rgba(120, 220, 150, 0.22);
+  color: #cfe9d6;
+}
+.codex-syn-tier b { color: var(--jade); margin-right: 4px; }
+
+/* 可点击的图鉴卡 + 法宝详情弹层 */
+.codex-clickable { cursor: pointer; pointer-events: auto; transition: transform 0.1s, box-shadow 0.15s; }
+.codex-clickable:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4); }
+.codex-clickable:active { transform: translateY(-1px) scale(0.98); }
+
+.codex-detail-overlay { z-index: 24; }
+.codex-detail-box {
+  position: relative;
+  display: flex; flex-direction: column;
+  width: min(94vw, 460px);
+  max-height: 88vh; overflow: hidden;
+  padding: 16px 18px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+.cd-preview {
+  flex: none;
+  width: 100%; height: 152px;
+  margin-bottom: 10px;
+  border-radius: 12px; overflow: hidden;
+  background: radial-gradient(circle at 50% 36%, rgba(40, 70, 55, 0.55), rgba(6, 14, 10, 0.92));
+  border: 1px solid var(--border);
+}
+.cd-preview canvas { width: 100% !important; height: 100% !important; display: block; }
+.cd-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.cd-title { padding-right: 30px; margin-bottom: 4px; }
+.cd-name { font-size: 20px; font-weight: 800; letter-spacing: 1px; line-height: 1.2; }
+.cd-rarity { font-size: 12px; opacity: 0.8; }
+.cd-sub { font-size: 12px; color: var(--jade); margin-top: 3px; }
+.cd-close {
+  position: absolute; top: 12px; right: 12px; z-index: 3;
+  width: 30px; height: 30px; border-radius: 8px;
+  background: rgba(10, 20, 15, 0.85); color: var(--ink);
+  border: 1px solid var(--border); cursor: pointer; pointer-events: auto; font-size: 14px;
+}
+.cd-close:active { transform: scale(0.92); }
+.cd-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 12px 0 10px; }
+.cd-tag {
+  font-size: 12px; font-weight: 700; padding: 1px 8px; border-radius: 7px;
+  background: rgba(120, 170, 255, 0.15); border: 1px solid rgba(120, 170, 255, 0.3);
+}
+.cd-taghint { font-size: 11px; opacity: 0.6; margin-right: 6px; }
+.cd-desc { font-size: 13px; line-height: 1.6; opacity: 0.82; }
+.cd-sec {
+  font-size: 12px; color: var(--gold); font-weight: 700; letter-spacing: 1px;
+  margin: 14px 0 6px; border-left: 3px solid var(--gold); padding-left: 8px;
+}
+.cd-form { font-size: 13px; line-height: 1.6; opacity: 0.85; }
+.cd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.cd-table th { font-size: 11px; opacity: 0.6; font-weight: 500; text-align: center; padding: 4px 6px; }
+.cd-table td { text-align: center; padding: 5px 6px; border-top: 1px solid rgba(255, 255, 255, 0.06); }
+.cd-table .cd-star { color: var(--gold); }
+.cd-notes { list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.cd-notes li { font-size: 12px; line-height: 1.5; opacity: 0.85; padding-left: 14px; position: relative; }
+.cd-notes li::before { content: "·"; position: absolute; left: 4px; color: var(--jade); font-weight: 700; }
+.cd-syns { display: flex; flex-direction: column; gap: 10px; }
+.cd-syn-block {
+  padding: 8px 10px; border-radius: 10px;
+  background: rgba(8, 18, 13, 0.85); border: 1px solid var(--border);
+}
+.cd-syn-tag { font-size: 12px; font-weight: 700; color: var(--jade); margin-bottom: 4px; }
+.cd-syn-row { font-size: 11px; line-height: 1.6; opacity: 0.85; }
+.cd-syn-row b { color: var(--gold); margin-right: 6px; }
+
+/* ---------- 市集分区 / 背包 / 羁绊面板 ---------- */
+.section-label {
+  font-size: 12px; opacity: 0.85; margin: 12px 0 6px;
+  border-left: 3px solid var(--jade); padding-left: 8px; letter-spacing: 1px;
+}
+.section-label .dim { opacity: 0.55; font-weight: 400; }
+
+.bag-list {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  min-height: 24px;
+}
+.empty-hint { font-size: 12px; opacity: 0.4; padding: 4px; }
+.bag-item {
+  position: relative;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 7px 10px; padding-right: 56px;
+  background: rgba(16, 30, 22, 0.9);
+  border: 1.5px solid var(--border); border-radius: 10px;
+  cursor: pointer; pointer-events: auto;
+  transition: transform 0.1s, background 0.15s;
+}
+.bag-item:hover { transform: translateY(-3px); background: rgba(24, 44, 30, 0.95); }
+.bag-item.pending { box-shadow: 0 0 0 2px var(--gold); }
+.bag-name { font-size: 13px; font-weight: 700; }
+.bag-tags { font-size: 11px; opacity: 0.7; }
+.bag-mod { font-size: 10px; color: var(--jade); }
+.bag-sell {
+  position: absolute; top: 50%; right: 6px; transform: translateY(-50%);
+  padding: 4px 8px; font-size: 11px; font-weight: 700;
+  color: #08140d; background: linear-gradient(135deg, var(--jade), var(--gold));
+  border: none; border-radius: 7px;
+  cursor: pointer; pointer-events: auto; white-space: nowrap;
+}
+.bag-sell:active { transform: translateY(-50%) scale(0.94); }
+
+.synergy-panel {
+  display: none;
+  margin: 10px 0;
+  padding: 12px;
+  background: rgba(8, 18, 13, 0.9);
+  border: 1px solid var(--border); border-radius: 12px;
+}
+.synergy-panel.visible { display: block; }
+.syn-title { font-size: 13px; color: var(--gold); margin-bottom: 8px; }
+.syn-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 4px 0; font-size: 12px; opacity: 0.5;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+.syn-row.has { opacity: 1; }
+.syn-tag { min-width: 84px; font-weight: 700; }
+.syn-tag small { font-weight: 400; opacity: 0.6; margin-left: 4px; font-size: 10px; }
+.syn-count { min-width: 28px; color: var(--gold); }
+.syn-tiers { display: flex; flex-wrap: wrap; gap: 6px; }
+.syn-tier {
+  font-size: 11px; padding: 1px 8px; border-radius: 7px;
+  background: rgba(120, 220, 150, 0.08); border: 1px solid rgba(120, 220, 150, 0.18);
+  opacity: 0.6;
+}
+.syn-tier.on { opacity: 1; color: var(--jade); border-color: var(--jade); background: rgba(120, 220, 150, 0.2); }
+
+@media (max-width: 640px) {
+  .topbar { gap: 6px; padding: 6px 10px; font-size: 11px; top: 8px; }
+  .hpbar { width: 96px; }
+  .card h1 { font-size: 24px; }
+  .syn-tag { min-width: 60px; }
+  .syn-tag small { display: none; }
+  /* 底部法宝栏：10 格在窄屏会超宽，缩小 + 允许换行 */
+  .treasure-bar { gap: 3px; padding: 4px 5px; flex-wrap: wrap; max-width: 96vw; justify-content: center; }
+  .tslot { width: 34px; height: 34px; }
+  .tslot-name { font-size: 8px; }
+  .tslot-tags { font-size: 7px; }
+  .arts-strip { top: 78px; }
+  .shop-title { font-size: 16px; }
+}
