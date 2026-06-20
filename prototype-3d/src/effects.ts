@@ -249,35 +249,68 @@ export function createThunderStrike(position: THREE.Vector3, tier = 1): Effect {
   const root = new THREE.Group();
   root.name = "Effect_ThunderSeal";
   root.position.copy(position);
-  root.scale.setScalar(1 + (tier - 1) * 0.35);
+  root.scale.setScalar(1 + (tier - 1) * 0.3);
 
-  const boltColor = tier >= 3 ? 0xffe6a8 : 0xbfe8ff;
-  const boltEmis = tier >= 3 ? 0xffc24a : 0x66ccff;
-  const bolt = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.035 + (tier - 1) * 0.03, 0.09 + (tier - 1) * 0.05, 4.2, 7),
-    makeMat(boltColor, boltEmis, 2.4, 0.78),
-  );
-  bolt.name = "thunder_bolt";
-  bolt.position.y = 2.2;
-  root.add(bolt);
+  const core = tier >= 3 ? 0xffe6a8 : 0xbfe8ff;
+  const emis = tier >= 3 ? 0xffc24a : 0x66ccff;
 
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.04, 8, 36), makeMat(0xffffff, 0x86d7ff, 2.0, 0.78));
-  ring.rotation.x = Math.PI / 2;
-  ring.position.y = 0.08;
-  root.add(ring);
+  // 锯齿主干：自上而下随机折点 → 平滑曲线 → 管状几何（实心亮芯 + 半透辉光）
+  const pts: THREE.Vector3[] = [];
+  const segs = 6;
+  for (let i = 0; i <= segs; i++) {
+    const y = 4.4 - (4.4 / segs) * i;
+    const j = i === 0 || i === segs ? 0 : 1;
+    pts.push(new THREE.Vector3((Math.random() - 0.5) * 0.85 * j, y, (Math.random() - 0.5) * 0.85 * j));
+  }
+  const curve = new THREE.CatmullRomCurve3(pts);
+  const boltR = 0.05 + (tier - 1) * 0.025;
+  const bolt = new THREE.Mesh(new THREE.TubeGeometry(curve, 14, boltR, 5, false), makeMat(0xffffff, emis, 2.7, 0.95));
+  bolt.name = "bolt"; root.add(bolt);
+  const glow = new THREE.Mesh(new THREE.TubeGeometry(curve, 14, boltR * 2.6, 5, false), makeMat(core, emis, 1.8, 0.5));
+  glow.name = "bolt"; root.add(glow);
+
+  // 一条分叉
+  const bp = pts[2 + Math.floor(Math.random() * 2)];
+  const bend = new THREE.Vector3(bp.x + (Math.random() < 0.5 ? -1 : 1) * (0.8 + Math.random() * 0.6), bp.y - 1.0, bp.z + (Math.random() - 0.5) * 0.8);
+  const branchCurve = new THREE.CatmullRomCurve3([bp.clone(), bp.clone().lerp(bend, 0.5), bend]);
+  const branch = new THREE.Mesh(new THREE.TubeGeometry(branchCurve, 6, boltR * 0.7, 4, false), makeMat(0xffffff, emis, 2.3, 0.9));
+  branch.name = "bolt"; root.add(branch);
+
+  // 落地闪光盘 + 冲击环
+  const flash = new THREE.Mesh(new THREE.CircleGeometry(0.85 + (tier - 1) * 0.3, 20), makeMat(0xffffff, emis, 2.4, 0.8));
+  flash.name = "flash"; flash.rotation.x = -Math.PI / 2; flash.position.y = 0.04; root.add(flash);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.7, 0.05, 8, 36), makeMat(core, emis, 2.0, 0.85));
+  ring.name = "ring"; ring.rotation.x = Math.PI / 2; ring.position.y = 0.06; root.add(ring);
+
+  // 迸溅火花（共用一个几何体）
+  const sparkGeo = new THREE.TetrahedronGeometry(0.08);
+  const sparkN = 4 + (tier - 1) * 2;
+  for (let i = 0; i < sparkN; i++) {
+    const sp = new THREE.Mesh(sparkGeo, makeMat(core, emis, 2.2, 0.95));
+    sp.name = "spark";
+    const a = (i / sparkN) * Math.PI * 2;
+    sp.position.set(Math.cos(a) * 0.35, 0.1, Math.sin(a) * 0.35);
+    sp.userData.v = new THREE.Vector3(Math.cos(a) * (2.6 + Math.random()), 1.6 + Math.random(), Math.sin(a) * (2.6 + Math.random()));
+    root.add(sp);
+  }
 
   return {
     object: root,
     age: 0,
-    duration: 0.36,
-    update: (_dt, t) => {
-      bolt.scale.set(1 + t * 0.6, 1 - t * 0.35, 1 + t * 0.6);
-      ring.scale.setScalar(1 + t * 1.7);
-      root.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          child.material.opacity = Math.max(0, 0.8 * (1 - t));
+    duration: 0.4,
+    update: (dt, t) => {
+      flash.scale.setScalar(1 + t * 1.6);
+      ring.scale.setScalar(1 + t * 2.6);
+      for (const c of root.children) {
+        if (c.name === "spark" && c.userData.v instanceof THREE.Vector3) {
+          const v = c.userData.v as THREE.Vector3; c.position.addScaledVector(v, dt); v.y -= dt * 6; c.rotation.x += dt * 8;
         }
-      });
+        if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial) {
+          const flick = c.name === "bolt" ? 0.55 + Math.abs(Math.sin(t * 30)) * 0.45 : 1; // 主干高频明灭
+          const base = c.name === "flash" ? 0.8 : c.name === "spark" ? 0.95 : c.name === "ring" ? 0.85 : 0.92;
+          c.material.opacity = Math.max(0, base * (1 - t) * flick);
+        }
+      }
     },
   };
 }
@@ -293,9 +326,16 @@ export function createBindingField(position: THREE.Vector3, radius = 4.2, tier =
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.05;
   root.add(ring);
+  // 反向自转的符文内环
+  const rune = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.82, 0.02, 6, 56), makeMat(0xffffff, ringEmis, 1.6, 0.5));
+  rune.name = "rune"; rune.rotation.x = Math.PI / 2; rune.position.y = 0.06; root.add(rune);
   if (tier >= 2) { // 高星额外内圈
     const inner = new THREE.Mesh(new THREE.TorusGeometry(radius * 0.6, 0.03, 8, 64), makeMat(ringColor, ringEmis, 1.6, 0.5));
     inner.rotation.x = Math.PI / 2; inner.position.y = 0.05; root.add(inner);
+  }
+  if (tier >= 2) { // 高星半透光顶穹
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(radius, 18, 9, 0, Math.PI * 2, 0, Math.PI * 0.5), makeMat(ringColor, ringEmis, 0.9, 0.16));
+    dome.name = "dome"; root.add(dome);
   }
 
   const pillarN = 8 + (tier - 1) * 4;
@@ -306,18 +346,31 @@ export function createBindingField(position: THREE.Vector3, radius = 4.2, tier =
     root.add(pillar);
   }
 
+  // 上升灵气光点（共用一个几何体）
+  const moteGeo = new THREE.OctahedronGeometry(0.09);
+  for (let i = 0; i < 3; i++) {
+    const m = new THREE.Mesh(moteGeo, makeMat(0xffffff, ringEmis, 2.0, 0.9));
+    m.name = "mote";
+    const a = Math.random() * Math.PI * 2, r = Math.random() * radius * 0.8;
+    m.position.set(Math.cos(a) * r, 0.2, Math.sin(a) * r);
+    m.userData.vy = 1.5 + Math.random();
+    root.add(m);
+  }
+
   return {
     object: root,
     age: 0,
     duration: 0.7,
-    update: (_dt, t) => {
-      ring.rotation.z += 0.08;
+    update: (dt, t) => {
+      ring.rotation.z += 0.08; rune.rotation.z -= 0.13;
       root.scale.setScalar(0.75 + t * 0.42);
-      root.traverse((child) => {
-        if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshStandardMaterial) {
-          child.material.opacity = Math.max(0, 0.66 * (1 - t));
+      for (const c of root.children) {
+        if (c.name === "mote") { c.position.y += (c.userData.vy as number) * dt; c.rotation.y += dt * 5; }
+        if (c instanceof THREE.Mesh && c.material instanceof THREE.MeshStandardMaterial) {
+          const base = c.name === "dome" ? 0.16 : c.name === "mote" ? 0.9 : 0.66;
+          c.material.opacity = Math.max(0, base * (1 - t));
         }
-      });
+      }
     },
   };
 }

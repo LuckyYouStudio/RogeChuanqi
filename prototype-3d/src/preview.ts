@@ -184,7 +184,7 @@ export function createSkillPreview(container: HTMLElement): SkillPreview {
     if (dt > 0.05) dt = 0.05;
     caster.rotation.y += dt * 0.5;
     for (const tg of targets) tg.rotation.y += dt * 0.8;
-    if (curForm === "orbit") { if (!orbitDone) { spawnOrbit(); orbitDone = true; } }
+    if (curForm === "orbit" || curForm === "bladering") { if (!orbitDone) { spawnOrbit(); orbitDone = true; } }
     else { fireT -= dt; if (fireT <= 0) { fireT = intervalFor(curForm); fireOnce(curForm); } }
     for (let i = projs.length - 1; i >= 0; i--) if (!projs[i].update(dt)) projs.splice(i, 1);
     for (let i = fx.length - 1; i >= 0; i--) {

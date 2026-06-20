@@ -51,55 +51,74 @@ export function createSwordCultivator() {
 }
 
 // ---------- 敌人：邪傀儡（elite/boss 更狰狞） ----------
+// 性能：几何体/材质按"单位尺寸"在模块级共享，每次刷怪零 GPU 上传（elite 仅靠 root.scale=1.2 放大）。
+// 注意：因此敌人 mesh 不可再被 disposeObject 释放（会销毁共享资源）——主程改为对象池回收复用。
+const EG_body = new THREE.ConeGeometry(0.56, 1.46, 7);
+const EG_rags = new THREE.CylinderGeometry(0.5, 0.78, 0.4, 7, 1, true);
+const EG_talisman = new THREE.BoxGeometry(0.18, 0.5, 0.02);
+const EG_mask = new THREE.BoxGeometry(0.5, 0.34, 0.1);
+const EG_eye = new THREE.SphereGeometry(0.05, 8, 6);
+const EG_core = new THREE.SphereGeometry(0.13, 12, 10);
+const EG_arm = new THREE.CapsuleGeometry(0.08, 0.56, 5, 8);
+const EG_claw = new THREE.ConeGeometry(0.06, 0.26, 5);
+const EG_horn = new THREE.ConeGeometry(0.07, 0.4, 5);
+// 两变体不同色的材质
+const EM_normal = { body: mat(0x8a4456, 0x1c060c, 0.3, 0.05, 0.7), rags: mat(0x4a2330, 0x1c060c, 0.2, 0, 0.85), eye: glowMat(0xff5a6e, 0xc01a30, 1.8), core: glowMat(0xff6e7c, 0xb61728, 1.6) };
+const EM_elite = { body: mat(0xd14b5e, 0x4a0c16, 0.6, 0.05, 0.7), rags: mat(0x6e2230, 0x4a0c16, 0.2, 0, 0.85), eye: glowMat(0xffd36b, 0xff8a1b, 1.8), core: glowMat(0xffb15d, 0xff7d1b, 1.6) };
+// 两变体共用的材质
+const EM_talisman = mat(0xf0d28c, 0x5b3000, 0.35);
+const EM_mask = mat(0xe6d4af, 0x000000, 0, 0, 0.6);
+const EM_arm = mat(0x6e2f40);
+const EM_claw = mat(0xe6c4bf, 0x2b070a, 0.2);
+const EM_horn = mat(0x2a0e14, 0x000000, 0, 0.2, 0.5);
+
 export function createCorpsePuppet(elite = false) {
   const root = new THREE.Group();
   root.name = elite ? "EliteCorpsePuppet_Model" : "CorpsePuppet_Model";
-  const s = elite ? 1.2 : 1;
-  const bodyColor = elite ? 0xd14b5e : 0x8a4456;
-  const emis = elite ? 0x4a0c16 : 0x1c060c;
+  const M = elite ? EM_elite : EM_normal;
 
-  const body = new THREE.Mesh(new THREE.ConeGeometry(0.56 * s, 1.46 * s, 7), mat(bodyColor, emis, elite ? 0.6 : 0.3, 0.05, 0.7));
-  body.position.y = 0.74 * s; root.add(body);
+  const body = new THREE.Mesh(EG_body, M.body);
+  body.position.y = 0.74; root.add(body);
 
   // 破布裙摆
-  const rags = new THREE.Mesh(new THREE.CylinderGeometry(0.5 * s, 0.78 * s, 0.4 * s, 7, 1, true), mat(elite ? 0x6e2230 : 0x4a2330, emis, 0.2, 0, 0.85));
-  rags.position.y = 0.3 * s; root.add(rags);
+  const rags = new THREE.Mesh(EG_rags, M.rags);
+  rags.position.y = 0.3; root.add(rags);
 
   // 飘动符咒
   for (const sx of [-1, 1]) {
-    const talisman = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.5 * s, 0.02), mat(0xf0d28c, 0x5b3000, 0.35));
-    talisman.position.set(sx * 0.34 * s, 1.2 * s, -0.32 * s); talisman.rotation.set(-0.2, 0, sx * 0.2); root.add(talisman);
+    const talisman = new THREE.Mesh(EG_talisman, EM_talisman);
+    talisman.position.set(sx * 0.34, 1.2, -0.32); talisman.rotation.set(-0.2, 0, sx * 0.2); root.add(talisman);
   }
 
   // 鬼面 + 双眼凶光
-  const mask = new THREE.Mesh(new THREE.BoxGeometry(0.5 * s, 0.34 * s, 0.1 * s), mat(0xe6d4af, 0x000000, 0, 0, 0.6));
-  mask.position.set(0, 1.2 * s, 0.4 * s); root.add(mask);
+  const mask = new THREE.Mesh(EG_mask, EM_mask);
+  mask.position.set(0, 1.2, 0.4); root.add(mask);
   for (const sx of [-1, 1]) {
-    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05 * s, 8, 6), glowMat(elite ? 0xffd36b : 0xff5a6e, elite ? 0xff8a1b : 0xc01a30, 1.8));
-    eye.position.set(sx * 0.12 * s, 1.23 * s, 0.46 * s); root.add(eye);
+    const eye = new THREE.Mesh(EG_eye, M.eye);
+    eye.position.set(sx * 0.12, 1.23, 0.46); root.add(eye);
   }
 
   // 妖丹（胸口核心）
-  const core = new THREE.Mesh(new THREE.SphereGeometry(0.13 * s, 12, 10), glowMat(elite ? 0xffb15d : 0xff6e7c, elite ? 0xff7d1b : 0xb61728, 1.6));
-  core.position.set(0, 0.74 * s, 0.48 * s); root.add(core);
+  const core = new THREE.Mesh(EG_core, M.core);
+  core.position.set(0, 0.74, 0.48); root.add(core);
 
   // 利爪
   for (const side of [-1, 1]) {
-    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.08 * s, 0.56 * s, 5, 8), mat(0x6e2f40));
-    arm.position.set(side * 0.5 * s, 0.78 * s, 0.06 * s); arm.rotation.z = side * 0.95; root.add(arm);
-    const claw = new THREE.Mesh(new THREE.ConeGeometry(0.06 * s, 0.26 * s, 5), mat(0xe6c4bf, 0x2b070a, 0.2));
-    claw.position.set(side * 0.72 * s, 0.5 * s, 0.06 * s); claw.rotation.z = side * -0.4; root.add(claw);
+    const arm = new THREE.Mesh(EG_arm, EM_arm);
+    arm.position.set(side * 0.5, 0.78, 0.06); arm.rotation.z = side * 0.95; root.add(arm);
+    const claw = new THREE.Mesh(EG_claw, EM_claw);
+    claw.position.set(side * 0.72, 0.5, 0.06); claw.rotation.z = side * -0.4; root.add(claw);
   }
 
   // 妖王头角
   if (elite) {
     for (const side of [-1, 1]) {
-      const horn = new THREE.Mesh(new THREE.ConeGeometry(0.07 * s, 0.4 * s, 5), mat(0x2a0e14, 0x000000, 0, 0.2, 0.5));
-      horn.position.set(side * 0.18 * s, 1.5 * s, 0.32 * s); horn.rotation.set(-0.5, 0, side * 0.4); root.add(horn);
+      const horn = new THREE.Mesh(EG_horn, EM_horn);
+      horn.position.set(side * 0.18, 1.5, 0.32); horn.rotation.set(-0.5, 0, side * 0.4); root.add(horn);
     }
   }
 
-  root.scale.setScalar(s);
+  root.scale.setScalar(elite ? 1.2 : 1);
   return setShadow(root);
 }
 

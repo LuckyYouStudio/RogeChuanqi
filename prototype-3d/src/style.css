@@ -12,15 +12,18 @@ html, body, #app {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: none; /* 禁用下拉刷新 / 橡皮筋滚动 */
   background: #09110e;
   font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   color: var(--ink);
   -webkit-user-select: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation; /* 关闭双击缩放，保留必要触控 */
 }
 
-canvas { display: block; }
+/* 画布吃满触控手势，避免手指拖动时页面跟着平移/缩放（摇杆在画布上取触点） */
+canvas { display: block; touch-action: none; }
 
 .hud {
   position: fixed;
@@ -32,7 +35,7 @@ canvas { display: block; }
 /* 顶部状态条 */
 .topbar {
   position: absolute;
-  top: 12px;
+  top: calc(12px + env(safe-area-inset-top));
   left: 50%;
   transform: translateX(-50%);
   display: flex;
@@ -58,6 +61,7 @@ canvas { display: block; }
   transition: width 0.12s linear;
 }
 .stat { display: flex; flex-direction: column; align-items: center; min-width: 44px; }
+.stat.stat-power span { color: var(--jade); } /* 灵力=积分，用绿色区别于金色灵石（提高优先级覆盖 .stat span） */
 .stat b { font-size: 10px; opacity: 0.6; font-weight: 500; }
 .stat span { font-size: 16px; color: var(--gold); font-weight: 700; }
 
@@ -75,25 +79,34 @@ canvas { display: block; }
 }
 
 /* 羁绊提示 */
+/* 羁绊指示：顶栏左下竖排（从上往下），避免被顶栏遮挡 */
 .synergy {
   position: absolute;
-  top: 64px; left: 50%;
-  transform: translateX(-50%);
-  font-size: 12px;
-  letter-spacing: 1px;
-  color: var(--jade);
-  text-shadow: 0 0 8px rgba(80, 200, 130, 0.5);
+  top: calc(92px + env(safe-area-inset-top));
+  left: calc(8px + env(safe-area-inset-left));
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  pointer-events: none;
 }
+.syn-chip {
+  font-size: 11px; font-weight: 800; line-height: 1.4;
+  padding: 1px 7px; border-radius: 7px;
+  color: #0b140d; background: var(--tc);
+  opacity: 0.5; /* 在凑但未激活：暗显 */
+}
+.syn-chip.on { opacity: 1; box-shadow: 0 0 7px var(--tc); } /* 已激活：高亮 */
 
-/* 飘字 */
+/* 飘字（JS 用 transform: translate3d 定位，故锚在视口原点 0,0） */
 .floater {
   position: fixed;
+  top: 0;
+  left: 0;
   transform: translate(-50%, -50%);
   font-size: 15px;
   font-weight: 700;
   pointer-events: none;
   text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8);
   z-index: 12;
+  will-change: transform, opacity;
 }
 
 /* 警示 */
@@ -239,11 +252,20 @@ canvas { display: block; }
   border: none; color: #08140d;
   background: linear-gradient(135deg, var(--jade), var(--gold));
 }
+/* 键位提示小键帽 */
+.keycap {
+  display: inline-block; min-width: 18px; padding: 1px 5px; margin: 0 2px;
+  font-family: ui-monospace, "Consolas", monospace; font-size: 12px; font-weight: 800; line-height: 1.4;
+  text-align: center; color: var(--gold);
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 209, 102, 0.55); border-bottom-width: 2px; border-radius: 5px;
+  vertical-align: middle; text-shadow: none;
+}
 
 /* ---------- 法宝栏（底部常驻 + 市集内） ---------- */
 .treasure-bar {
   position: absolute;
-  bottom: 10px; left: 50%;
+  bottom: calc(10px + env(safe-area-inset-bottom)); left: 50%;
   transform: translateX(-50%);
   display: flex; gap: 5px;
   padding: 5px 8px;
@@ -253,8 +275,9 @@ canvas { display: block; }
   pointer-events: none;
 }
 .tslot {
-  width: 58px; height: 46px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  position: relative;
+  width: 58px; height: 60px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   border: 1.5px solid rgba(120, 220, 150, 0.18);
   border-radius: 8px;
   background: rgba(0, 0, 0, 0.25);
@@ -263,12 +286,28 @@ canvas { display: block; }
 .tslot.filled { background: rgba(20, 36, 26, 0.85); }
 .tslot.swap { cursor: pointer; pointer-events: auto; border-style: dashed; border-color: var(--gold); }
 .tslot.swap:hover { background: rgba(60, 50, 20, 0.9); }
-.tslot-name { font-weight: 700; line-height: 1.1; text-align: center; }
-.tslot-tags { font-size: 9px; opacity: 0.7; }
+.tslot-ic { width: 26px; height: 26px; flex: none; filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.5)); }
+.tslot-name { font-weight: 700; line-height: 1.05; text-align: center; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 法宝栏羁绊标签：彩色小芯片（在冷却遮罩之上） */
+.tslot-tags { position: relative; z-index: 2; display: flex; gap: 2px; justify-content: center; max-width: 100%; }
+.tslot-tags i { font-style: normal; font-weight: 800; font-size: 8.5px; line-height: 1.5; color: #0b140d; background: var(--jade); border-radius: 4px; padding: 0 3px; }
 .tslot-empty { opacity: 0.35; }
-.tslot-star { font-size: 8px; color: var(--gold); line-height: 1; height: 9px; }
+.tslot-star { position: absolute; top: 2px; right: 4px; z-index: 2; font-size: 8px; color: var(--gold); line-height: 1; text-shadow: 0 0 3px rgba(0, 0, 0, 0.7); }
+/* 法宝冷却遮罩：时钟旋转扫除（conic-gradient 角度由 updateTreasureCooldowns 每帧设置） */
+.tslot-cd { position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; opacity: 0; }
 .bag-star { color: var(--gold); font-size: 11px; }
-.shop-slots .tslot { pointer-events: auto; }
+.shop-slots .tslot { pointer-events: auto; width: 62px; height: 66px; }
+
+/* ---------- 法宝图标（品阶配色 + 形态字形） ---------- */
+.tic { width: 100%; height: 100%; display: block; }
+.tic-bg { fill: currentColor; fill-opacity: 0.13; stroke: currentColor; stroke-opacity: 0.42; stroke-width: 1; }
+.tic-glyph { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.offer-head { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; }
+.offer-head .offer-name { margin-bottom: 0; }
+.offer-ic { width: 38px; height: 38px; flex: none; }
+.bag-ic { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 30px; height: 30px; }
+.codex-ic { width: 40px; height: 40px; flex: none; }
+.cd-ic { width: 30px; height: 30px; display: inline-block; vertical-align: middle; margin-right: 6px; }
 
 /* ---------- 功法条 ---------- */
 .arts-strip {
@@ -310,7 +349,7 @@ canvas { display: block; }
 /* 战斗中图鉴按钮 */
 .codex-fab {
   position: absolute;
-  top: 12px; right: 12px;
+  top: calc(12px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
   padding: 7px 13px;
   font-size: 12px; font-weight: 700;
   color: var(--jade);
@@ -323,32 +362,46 @@ canvas { display: block; }
 }
 .codex-fab:active { transform: scale(0.94); }
 
-/* 图鉴内羁绊效果 */
-.codex-syn {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-  margin: 0 0 8px;
-  padding: 8px 10px;
-  background: rgba(8, 18, 13, 0.85);
+/* 录制按钮 */
+.rec-fab {
+  position: absolute;
+  top: calc(50px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
+  padding: 7px 13px;
+  font-size: 12px; font-weight: 700;
+  color: #ff8a8a;
+  background: var(--panel);
+  border: 1px solid rgba(255, 110, 110, 0.45);
+  border-radius: 10px;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 12;
+}
+.rec-fab:active { transform: scale(0.94); }
+.rec-fab.recording {
+  color: #fff;
+  background: rgba(200, 40, 40, 0.85);
+  border-color: #ff5a5a;
+  animation: recPulse 1.1s ease-in-out infinite;
+}
+@keyframes recPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 70, 70, 0.55); }
+  50% { box-shadow: 0 0 0 6px rgba(255, 70, 70, 0); }
+}
+
+/* 音效开关 */
+.mute-fab {
+  position: absolute;
+  top: calc(88px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
+  width: 38px; height: 34px;
+  font-size: 16px; line-height: 1;
+  color: var(--jade);
+  background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 10px;
+  pointer-events: auto; cursor: pointer;
+  z-index: 12;
 }
-.codex-syn-h {
-  font-size: 12px; font-weight: 700; color: var(--gold);
-  margin-right: 4px;
-}
-.codex-syn-tier {
-  font-size: 11px; line-height: 1.5;
-  padding: 2px 9px; border-radius: 8px;
-  background: rgba(120, 220, 150, 0.1);
-  border: 1px solid rgba(120, 220, 150, 0.22);
-  color: #cfe9d6;
-}
-.codex-syn-tier b { color: var(--jade); margin-right: 4px; }
-
-/* 可点击的图鉴卡 + 法宝详情弹层 */
-.codex-clickable { cursor: pointer; pointer-events: auto; transition: transform 0.1s, box-shadow 0.15s; }
-.codex-clickable:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(0, 0, 0, 0.4); }
-.codex-clickable:active { transform: translateY(-1px) scale(0.98); }
+.mute-fab:active { transform: scale(0.94); }
 
 .codex-detail-overlay { z-index: 24; }
 .codex-detail-box {
@@ -411,6 +464,36 @@ canvas { display: block; }
 .cd-syn-row { font-size: 11px; line-height: 1.6; opacity: 0.85; }
 .cd-syn-row b { color: var(--gold); margin-right: 6px; }
 
+/* ---------- 图鉴·法宝卡（按品阶分组 · 名/羁绊/属性自上而下 · 单击进详情） ---------- */
+#codexScreen .shop-box { display: flex; flex-direction: column; width: min(96vw, 1000px); height: min(92vh, 900px); }
+/* 主体：纵向分品阶组，组内 3~4 列卡片网格；内容超高即滚动 */
+.codex-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.codex-rgroup { display: flex; flex-direction: column; gap: 7px; }
+.codex-rhead {
+  font-size: 12px; font-weight: 800; letter-spacing: 1px; color: var(--rc);
+  padding-left: 8px; border-left: 3px solid var(--rc); display: flex; align-items: center; gap: 6px;
+}
+.codex-rhead span { font-size: 10px; opacity: 0.6; font-weight: 600; }
+.codex-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+/* 单张法宝卡：名（顶）→ 羁绊（中）→ 攻/冷（底） */
+.codex-card {
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+  padding: 9px 10px;
+  color: var(--ink); /* button 默认把文字重置成黑色，这里恢复浅色，避免描述看不清 */
+  background: rgba(16, 30, 22, 0.85); border: 1.5px solid var(--rc); border-radius: 11px;
+  cursor: pointer; pointer-events: auto;
+  transition: transform 0.08s, box-shadow 0.12s, background 0.12s;
+}
+.codex-card:hover { transform: translateY(-2px); background: rgba(24, 44, 30, 0.96); box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4); }
+.codex-card:active { transform: translateY(-1px) scale(0.99); }
+.cc-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.cc-ic { width: 30px; height: 30px; flex: none; }
+.cc-name { font-size: 14px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cc-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.cc-tag { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 7px; color: #0b140d; background: var(--tc); }
+.cc-form { font-size: 11px; color: var(--ink); opacity: 0.62; }
+.cc-stat { font-size: 12px; color: var(--jade); font-weight: 700; }
+
 /* ---------- 市集分区 / 背包 / 羁绊面板 ---------- */
 .section-label {
   font-size: 12px; opacity: 0.85; margin: 12px 0 6px;
@@ -426,7 +509,7 @@ canvas { display: block; }
 .bag-item {
   position: relative;
   display: flex; flex-direction: column; gap: 2px;
-  padding: 7px 10px; padding-right: 56px;
+  padding: 7px 10px; padding-right: 56px; padding-left: 46px;
   background: rgba(16, 30, 22, 0.9);
   border: 1.5px solid var(--border); border-radius: 10px;
   cursor: pointer; pointer-events: auto;
@@ -473,16 +556,75 @@ canvas { display: block; }
 .syn-tier.on { opacity: 1; color: var(--jade); border-color: var(--jade); background: rgba(120, 220, 150, 0.2); }
 
 @media (max-width: 640px) {
-  .topbar { gap: 6px; padding: 6px 10px; font-size: 11px; top: 8px; }
-  .hpbar { width: 96px; }
+  .topbar { gap: 4px; padding: 5px 8px; font-size: 10px; top: calc(8px + env(safe-area-inset-top)); flex-wrap: wrap; max-width: 98vw; justify-content: center; }
+  .hpbar { width: 72px; }
+  .stat { min-width: 28px; }
+  .stat b { font-size: 9px; }
+  .stat span { font-size: 13px; }
+  /* 羁绊竖排：放到（两行）顶栏下方，避免窄屏被遮挡 */
+  .synergy { top: calc(90px + env(safe-area-inset-top)); }
   .card h1 { font-size: 24px; }
+  .card button { min-height: 48px; } /* 加大点按区域 */
   .syn-tag { min-width: 60px; }
   .syn-tag small { display: none; }
   /* 底部法宝栏：10 格在窄屏会超宽，缩小 + 允许换行 */
   .treasure-bar { gap: 3px; padding: 4px 5px; flex-wrap: wrap; max-width: 96vw; justify-content: center; }
-  .tslot { width: 34px; height: 34px; }
-  .tslot-name { font-size: 8px; }
-  .tslot-tags { font-size: 7px; }
-  .arts-strip { top: 78px; }
+  .tslot { width: 38px; height: 46px; }
+  .tslot-ic { width: 22px; height: 22px; }
+  .tslot-name { display: none; } /* 窄屏隐藏名字，但保留羁绊标签 */
+  .tslot-tags i { font-size: 8px; padding: 0 2px; }
+  .shop-slots .tslot { width: 52px; height: 58px; }
+  .arts-strip { top: calc(78px + env(safe-area-inset-top)); }
   .shop-title { font-size: 16px; }
+  .keycap { display: none; } /* 手机无键盘，隐藏键位提示 */
+
+  /* 弹窗在手机上接近全屏并可滚动 + 刘海安全区 */
+  .shop-box {
+    width: 100vw; max-width: 100vw; max-height: 100dvh; border-radius: 0;
+    padding: calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom));
+  }
+  .codex-detail-box { width: 96vw; max-height: 90dvh; }
+  /* 市集卡片两列，按钮加高便于点按 */
+  .shop-offers { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .offer { padding: 10px; }
+  .offer-name { font-size: 14px; }
+  .offer-ic { width: 32px; height: 32px; }
+  .offer-buy { min-height: 42px; font-size: 14px; }
+  /* 背包整行排列，单条更高更易点 */
+  .bag-item { width: 100%; padding-top: 10px; padding-bottom: 10px; }
+  /* 操作区吸底常驻，「继续历练」始终可达 */
+  .shop-actions {
+    position: sticky; bottom: 0; z-index: 1; flex-wrap: wrap;
+    margin: 4px -14px calc(-14px - env(safe-area-inset-bottom));
+    padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+    background: linear-gradient(180deg, rgba(10, 22, 17, 0), var(--panel) 28%);
+  }
+  .shop-actions button { flex: 1 1 30%; min-height: 46px; padding: 12px 8px; font-size: 14px; }
+  /* fab 加大点按区域 */
+  .codex-fab, .rec-fab { padding: 9px 14px; font-size: 13px; }
+
+  /* 图鉴：手机 3 列卡片，名/羁绊/属性自上而下；超高滚动 */
+  #codexScreen .shop-box { height: 100dvh; }
+  .codex-body { gap: 9px; }
+  .codex-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .codex-card { padding: 7px 8px; gap: 5px; border-width: 1px; border-radius: 9px; }
+  .cc-ic { width: 26px; height: 26px; }
+  .cc-name { font-size: 13px; }
+  .cc-head { gap: 6px; }
+  .cc-form { display: none; } /* 手机窄列省空间，形态在详情里看 */
+}
+
+/* 触屏设备：左下虚拟摇杆常驻可见，按下时浮动跟随手指（见 main.ts joyStart/joyEnd） */
+@media (pointer: coarse) {
+  .joystick {
+    display: block;
+    top: auto;
+    left: calc(26px + env(safe-area-inset-left));
+    bottom: calc(26px + env(safe-area-inset-bottom));
+    width: 132px; height: 132px;
+    background: rgba(120, 220, 150, 0.1);
+    border-color: rgba(120, 220, 150, 0.38);
+  }
+  .joystick.active { background: rgba(120, 220, 150, 0.16); }
+  .stick { width: 60px; height: 60px; margin: -30px 0 0 -30px; }
 }

@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "xianjie",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "prototype-3d", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5187", "--strictPort"],
+      "port": 5187
+    }
+  ]
+}
