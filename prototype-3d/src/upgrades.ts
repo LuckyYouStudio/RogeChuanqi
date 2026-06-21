@@ -27,16 +27,15 @@ export type SkillForm =
   | "sigil"   // 符阵：远程定点停留法阵，周期减速 + 磨伤
   | "vine"    // 缠藤：低速多向生长绿弹 + 减速
   | "boomerang" // 回旋镖：大弧往返穿击
-  | "bladering"; // 旋刃：环身高速旋绕的刀片（刀系，按品阶换模型）
+  | "bladering" // 旋刃：环身高速旋绕的刀片（刀系，按品阶换模型）
+  | "laser"; // 激光：向四周【固定方向】激射柱状激光（发射动画，不旋转），按品阶决定柱数
 
 export type Modifier = {
   damageMul?: number;   // 增伤（加法累加，最终用 1+sum）
   cdMul?: number;       // 冷却乘数（乘法，<1 更快）
   area?: number;        // 范围加成（加法）
   maxHp?: number;
-  regen?: number;
   defense?: number;
-  lifesteal?: number;
   moveSpeed?: number;
   pickupRadius?: number;
   projectiles?: number; // 多重投射物
@@ -98,6 +97,9 @@ export function sellValue(t: Treasure) { return Math.floor(RARITY_COST[t.rarity]
 // 功法（全局被动）
 export type Art = {
   id: string; name: string; rarity: Rarity; cost: number; desc: string; mod: Modifier;
+  hideMaxed?: boolean; // 行为型功法：市集不再出现已满级(★3)的法宝
+  excludeTag?: Tag;    // 行为型功法：市集不再出现该【羁绊】的法宝（缩小法宝池、更快升满星）
+  price?: number;      // 自定义灵石价（覆盖按品阶定价）
 };
 
 export const SKILL_LABEL: Record<SkillForm, { name: string; form: string }> = {
@@ -121,12 +123,13 @@ export const SKILL_LABEL: Record<SkillForm, { name: string; form: string }> = {
   vine: { name: "缠藤", form: "生长减速" },
   boomerang: { name: "回旋镖", form: "大弧往返" },
   bladering: { name: "旋刃", form: "环身旋斩" },
+  laser: { name: "激光", form: "周天光柱" },
 };
 
 export const TAG_HINT: Record<Tag, string> = {
-  剑: "多重穿透·暴击", 刀: "急速连斩", 仙: "续航回血", 魔: "高伤狂暴",
-  妖: "吸血爆裂·子弹裂变", 体: "厚血高防", 雷: "链式弹跳", 阵: "范围控场", 木: "拾取成长",
-  金: "锐金破势·暴击爆发", 水: "寒滞减速·续航回元", 火: "命中灼烧·焚燎爆裂", 土: "厚土护体·震退地崩",
+  剑: "多重穿透·暴击", 刀: "急速连斩", 仙: "护体·免死盾", 魔: "高伤狂暴",
+  妖: "爆裂·子弹裂变", 体: "厚血高防", 雷: "链式弹跳", 阵: "范围控场", 木: "拾取成长",
+  金: "锐金破势·暴击爆发", 水: "寒滞减速·控场", 火: "命中灼烧·焚燎爆裂", 土: "厚土护体·震退地崩",
 };
 
 export type SynergyDef = { tag: Tag; need: number; mod?: Modifier; flags?: Partial<Flags>; desc: string };
@@ -147,11 +150,11 @@ export const SYNERGIES: SynergyDef[] = [
   { tag: "雷", need: 4, mod: { damageMul: 0.1 }, flags: { chainBonus: 2 }, desc: "增伤10%，再弹跳2" },
   { tag: "雷", need: 6, mod: { area: 0.15 }, flags: { chainBonus: 2 }, desc: "范围+15%，再弹跳2" },
   { tag: "雷", need: 8, mod: { damageMul: 0.15 }, flags: { chainBonus: 3, thunderStorm: 3.5 }, desc: "天雷诛仙：增伤15%，再弹跳3，持续天雷" },
-  // 妖：吸血爆裂·裂变
-  { tag: "妖", need: 2, mod: { lifesteal: 0.05 }, desc: "吸血+5%" },
-  { tag: "妖", need: 4, mod: { lifesteal: 0.04 }, flags: { killExplode: 2.8 }, desc: "吸血+4%，击杀爆裂" },
-  { tag: "妖", need: 6, mod: { lifesteal: 0.05 }, flags: { killExplode: 3.6 }, desc: "吸血+5%，爆裂增强" },
-  { tag: "妖", need: 8, mod: { lifesteal: 0.08 }, flags: { killExplode: 4.6 }, desc: "血海滔天：吸血+8%，大爆裂" },
+  // 妖：击杀爆裂·子弹裂变（连环炸场流）
+  { tag: "妖", need: 2, mod: { damageMul: 0.06 }, desc: "增伤6%" },
+  { tag: "妖", need: 4, mod: { damageMul: 0.06 }, flags: { killExplode: 2.8 }, desc: "增伤6%，击杀爆裂" },
+  { tag: "妖", need: 6, mod: { damageMul: 0.08 }, flags: { killExplode: 3.6 }, desc: "增伤8%，爆裂增强" },
+  { tag: "妖", need: 8, mod: { damageMul: 0.16 }, flags: { killExplode: 4.8 }, desc: "血海滔天：增伤16%，大爆裂连锁" },
   // 金：锐金破势·暴击爆发
   { tag: "金", need: 2, mod: { damageMul: 0.08 }, flags: { crit: 0.05 }, desc: "增伤8%，暴击+5%" },
   { tag: "金", need: 4, flags: { critMul: 0.4, crit: 0.05 }, desc: "暴伤+40%，暴击+5%" },
@@ -162,17 +165,17 @@ export const SYNERGIES: SynergyDef[] = [
   { tag: "火", need: 4, mod: { area: 0.15 }, flags: { ignite: 1 }, desc: "范围+15%，灼烧增强" },
   { tag: "火", need: 6, mod: { damageMul: 0.12 }, flags: { killExplode: 3.2 }, desc: "增伤12%，击杀火爆" },
   { tag: "火", need: 8, mod: { damageMul: 0.25 }, flags: { ignite: 2, killExplode: 4.2 }, desc: "烈火·燎原焚天：增伤25%，强灼烧、大火爆" },
-  // 木：拾取成长·续航
+  // 木：拾取成长（经验/拾取雪球）
   { tag: "木", need: 2, mod: { pickupRadius: 2, xpMul: 0.15 }, desc: "拾取+2，经验+15%" },
-  { tag: "木", need: 4, mod: { regen: 0.8, xpMul: 0.15 }, desc: "回血+0.8/s，经验+15%" },
-  { tag: "木", need: 6, mod: { pickupRadius: 2, regen: 1.0, xpMul: 0.2 }, desc: "拾取+2，回血+1/s，经验+20%" },
-  { tag: "木", need: 8, mod: { regen: 1.5, xpMul: 0.3, pickupRadius: 3 }, desc: "万木回春：回血+1.5/s，经验+30%，拾取+3" },
+  { tag: "木", need: 4, mod: { pickupRadius: 2, xpMul: 0.2 }, desc: "拾取+2，经验+20%" },
+  { tag: "木", need: 6, mod: { pickupRadius: 2, xpMul: 0.25 }, desc: "拾取+2，经验+25%" },
+  { tag: "木", need: 8, mod: { pickupRadius: 3, xpMul: 0.45 }, desc: "万木·灵脉：拾取+3，经验+45%" },
   // —— 奇数派 3/5/7/9（续航/防御/控场·需专精）——
-  // 仙：续航 → 免死盾
-  { tag: "仙", need: 3, mod: { regen: 0.8, maxHp: 30 }, desc: "回血+0.8/s，血+30" },
-  { tag: "仙", need: 5, mod: { regen: 0.8, maxHp: 40, defense: 2 }, desc: "回血+0.8/s，血+40，防+2" },
-  { tag: "仙", need: 7, mod: { regen: 0.6 }, flags: { shieldInterval: 12 }, desc: "每12秒免死护盾，回血+0.6/s" },
-  { tag: "仙", need: 9, mod: { regen: 1.2 }, flags: { shieldInterval: 8 }, desc: "不死仙体：护盾每8秒，回血+1.2/s" },
+  // 仙：护体 → 免死盾（无回血，靠护盾续命）
+  { tag: "仙", need: 3, mod: { maxHp: 30, defense: 2 }, desc: "血+30，防+2" },
+  { tag: "仙", need: 5, mod: { maxHp: 40 }, flags: { shieldInterval: 14 }, desc: "血+40，每14秒免死护盾" },
+  { tag: "仙", need: 7, mod: { defense: 4 }, flags: { shieldInterval: 11 }, desc: "防+4，护盾每11秒" },
+  { tag: "仙", need: 9, mod: { maxHp: 70, defense: 4 }, flags: { shieldInterval: 7 }, desc: "不死仙体：护盾每7秒，血+70，防+4" },
   // 魔：高伤狂暴
   { tag: "魔", need: 3, mod: { damageMul: 0.18, defense: -2 }, desc: "增伤18%，防-2" },
   { tag: "魔", need: 5, mod: { damageMul: 0.15 }, flags: { berserk: 0.3 }, desc: "增伤15%，残血狂暴" },
@@ -188,11 +191,11 @@ export const SYNERGIES: SynergyDef[] = [
   { tag: "阵", need: 5, mod: { area: 0.2 }, flags: { auraDps: 16, auraRadius: 3.4 }, desc: "范围+20%，灭阵光环" },
   { tag: "阵", need: 7, mod: { area: 0.2 }, flags: { auraDps: 24, auraRadius: 4.0 }, desc: "范围+20%，光环增强" },
   { tag: "阵", need: 9, mod: { area: 0.3 }, flags: { auraDps: 44, auraRadius: 5.2 }, desc: "囚天大阵：范围+30%，永久强光环" },
-  // 水：寒滞减速·续航回元
-  { tag: "水", need: 3, mod: { regen: 0.6 }, flags: { chill: 1 }, desc: "回血+0.6/s，命中减速" },
-  { tag: "水", need: 5, mod: { lifesteal: 0.04, cdMul: 0.94 }, flags: { chill: 1 }, desc: "吸血+4%，急速6%，减速增强" },
-  { tag: "水", need: 7, mod: { area: 0.12, regen: 0.8 }, flags: { chill: 1 }, desc: "范围+12%，回血+0.8/s，减速增强" },
-  { tag: "水", need: 9, mod: { regen: 1.2, lifesteal: 0.05 }, flags: { chill: 2 }, desc: "润水·万川归海：重度寒滞，回血+1.2/s，吸血+5%" },
+  // 水：寒滞减速·控场（命中减速 + 范围/防御/急速）
+  { tag: "水", need: 3, mod: { area: 0.1 }, flags: { chill: 1 }, desc: "命中减速，范围+10%" },
+  { tag: "水", need: 5, mod: { cdMul: 0.92 }, flags: { chill: 1 }, desc: "急速8%，减速增强" },
+  { tag: "水", need: 7, mod: { area: 0.15, defense: 3 }, flags: { chill: 1 }, desc: "范围+15%，防+3，减速增强" },
+  { tag: "水", need: 9, mod: { area: 0.15, defense: 6 }, flags: { chill: 2 }, desc: "润水·万川归海：重度寒滞，范围+15%，防+6" },
   // 土：厚土护体·震退地崩
   { tag: "土", need: 3, mod: { maxHp: 50, defense: 5 }, desc: "血+50，防+5" },
   { tag: "土", need: 5, mod: { maxHp: 60, defense: 4, area: 0.15 }, desc: "血+60，防+4，范围+15%" },
@@ -228,7 +231,7 @@ export const TREASURES: Treasure[] = [
   { id: "t_moyan", name: "魔焰天罚", tags: ["魔", "雷"], rarity: "epic", cost: 32, skill: "rain", attack: 18, cd: 2.8, count: 5, radius: 5.5, traits: { burn: true }, desc: "魔焰自天而降，落处余火焚敌。" },
   // —— 补全各标签（确保都有便宜白件可叠高阶） ——
   { id: "t_yulu", name: "玉露灵针", tags: ["仙"], rarity: "rare", cost: 2, skill: "chain", attack: 20, cd: 2.4, count: 4, desc: "玉露凝针化作灵雷，在敌群间链式弹跳。" },
-  { id: "t_xuenu", name: "血怒刀", tags: ["魔", "妖"], rarity: "rare", cost: 2, skill: "forward", attack: 20, cd: 1.3, count: 1, traits: { burn: true }, desc: "血怒直进，破阵重击焚敌。" },
+  { id: "t_xuenu", name: "血怒刀", tags: ["魔", "妖"], rarity: "rare", cost: 2, skill: "radial", attack: 14, cd: 1.9, count: 8, traits: { burn: true }, desc: "血怒迸发，血气八方激射、灼蚀四周。" },
   // —— 刀·高阶回旋大刀（长射程·圆弧穿击） ——
   { id: "t_huifeng", name: "回风折刃", tags: ["刀", "木"], rarity: "epic", cost: 3, skill: "bladering", attack: 26, cd: 2.2, count: 4, radius: 2.6, desc: "折刃乘风，划大弧斩出复返。" },
   { id: "t_zhanyue", name: "斩月霸刀", tags: ["刀"], rarity: "legendary", cost: 4, skill: "bladering", attack: 42, cd: 2.6, count: 5, radius: 3, traits: { knock: true }, desc: "巨刀离手，弧光斩月，贯穿成排妖众。" },
@@ -263,15 +266,15 @@ export const TREASURES: Treasure[] = [
   { id: "t_tiangang", name: "天罡神雷", tags: ["雷"], rarity: "legendary", cost: 5, skill: "chain", attack: 30, cd: 1.8, count: 8, traits: { bounce: true }, desc: "天罡神雷，一击连引，雷光弹跳三十六方。" },
   // —— 五行·金（锐金破势·暴击爆发）：穿透/锋锐，≥9 含白件与跨标签桥 ——
   { id: "t_jinjian", name: "庚金飞剑", tags: ["金", "剑"], rarity: "common", cost: 1, skill: "sword", attack: 12, cd: 0.95, count: 1, traits: { pierce: true }, desc: "庚金所炼飞剑，锋锐洞穿成列。" },
-  { id: "t_jinren", name: "金锐刃", tags: ["金"], rarity: "common", cost: 1, skill: "forward", attack: 18, cd: 1.0, count: 1, traits: { pierce: true }, desc: "金芒沿前向直进，破阵洞穿。" },
+  { id: "t_jinren", name: "金锐刃", tags: ["金"], rarity: "common", cost: 1, skill: "sword", attack: 14, cd: 1.0, count: 2, traits: { pierce: true }, desc: "金芒化双飞剑追踪最近之敌，锋锐洞穿成列。" },
   { id: "t_poujia", name: "破甲锥", tags: ["金", "刀"], rarity: "uncommon", cost: 2, skill: "bladering", attack: 26, cd: 1.3, count: 3, radius: 2.4, traits: { pierce: true }, desc: "金锥化枪，长驱直贯一整列。" },
   { id: "t_jinguanglun", name: "金光轮", tags: ["金"], rarity: "uncommon", cost: 2, skill: "glaive", attack: 30, cd: 2.3, count: 1, radius: 6, traits: { knock: true }, desc: "金光巨轮掷出，划弧斩返、贯穿成排。" },
   { id: "t_liejin", name: "裂金诀", tags: ["金"], rarity: "rare", cost: 3, skill: "radial", attack: 12, cd: 1.8, count: 8, traits: { pierce: true }, desc: "金芒八方齐射，洞穿四周。" },
   { id: "t_jinfeng", name: "金锋斩", tags: ["金"], rarity: "rare", cost: 3, skill: "whirl", attack: 24, cd: 1.4, radius: 3.4, traits: { knock: true }, desc: "金锋旋身全圈尽斩，刚锐震退。" },
   { id: "t_gengjin", name: "庚金杀阵", tags: ["金", "阵"], rarity: "epic", cost: 4, skill: "radial", attack: 13, cd: 1.7, count: 10, traits: { pierce: true }, desc: "庚金煞气十方激射，无可遁形。" },
   { id: "t_jinsha", name: "金煞剑诀", tags: ["金", "剑"], rarity: "epic", cost: 4, skill: "sword", attack: 16, cd: 0.8, count: 3, traits: { pierce: true }, desc: "三道金煞剑气连发，锋锐洞穿。" },
-  { id: "t_taibai", name: "太白金芒", tags: ["金"], rarity: "legendary", cost: 5, skill: "lance", attack: 40, cd: 1.2, traits: { pierce: true, knock: true }, desc: "太白金星之芒，一线贯尽长列。" },
-  // —— 五行·水（寒滞减速·续航回元）：减速控场，≥9 ——
+  { id: "t_taibai", name: "太白金芒", tags: ["金"], rarity: "legendary", cost: 5, skill: "laser", attack: 40, cd: 1.4, traits: { pierce: true, knock: true }, desc: "太白金星之芒，化八道周天光柱向四周激射而出。" },
+  // —— 五行·水（寒滞减速·控场）：减速控场，≥9 ——
   { id: "t_shuijian", name: "寒泉飞剑", tags: ["水", "剑"], rarity: "common", cost: 1, skill: "sword", attack: 11, cd: 1.0, count: 1, traits: { slow: true }, desc: "寒泉所凝飞剑，命中沁寒滞敌。" },
   { id: "t_bingdan", name: "玄冰弹", tags: ["水"], rarity: "common", cost: 1, skill: "bolt", attack: 14, cd: 1.0, count: 1, traits: { slow: true }, desc: "玄冰法弹自动追敌，命中减速。" },
   { id: "t_hanbingzhen", name: "寒冰阵", tags: ["水", "阵"], rarity: "uncommon", cost: 2, skill: "sigil", attack: 14, cd: 2.0, radius: 4, traits: { slow: true }, desc: "落地结寒冰阵，持续锁滞磨伤。" },
@@ -282,14 +285,14 @@ export const TREASURES: Treasure[] = [
   { id: "t_xuanbing", name: "玄冰索命幡", tags: ["水", "妖"], rarity: "epic", cost: 4, skill: "bolt", attack: 20, cd: 1.1, count: 2, traits: { slow: true, fork: true }, desc: "玄冰双幡索敌，寒滞裂变。" },
   { id: "t_beiming", name: "北冥寒渊", tags: ["水", "仙"], rarity: "legendary", cost: 5, skill: "sigil", attack: 24, cd: 1.8, radius: 4.8, traits: { slow: true }, desc: "北冥寒渊落地成阵，大范围封冻磨伤。" },
   // —— 五行·火（命中灼烧·焚燎爆裂）：灼烧爆裂，≥9 ——
-  { id: "t_lihuodan", name: "离火弹", tags: ["火"], rarity: "common", cost: 1, skill: "forward", attack: 18, cd: 1.1, count: 1, traits: { burn: true }, desc: "离火沿前向直进，灼烧穿行之敌。" },
+  { id: "t_lihuodan", name: "离火弹", tags: ["火"], rarity: "common", cost: 1, skill: "bolt", attack: 14, cd: 1.1, count: 2, traits: { burn: true }, desc: "离火双弹自动索敌，命中余焰灼身。" },
   { id: "t_chiyanjian", name: "赤焰飞剑", tags: ["火", "剑"], rarity: "common", cost: 1, skill: "sword", attack: 11, cd: 1.0, count: 1, traits: { burn: true }, desc: "赤焰飞剑追敌，命中余焰焚身。" },
   { id: "t_yanlei", name: "炎雷击", tags: ["火", "雷"], rarity: "uncommon", cost: 2, skill: "strike", attack: 24, cd: 1.8, radius: 3, traits: { burn: true }, desc: "炎雷点名劈落，余焰灼身。" },
   { id: "t_lieyandao", name: "烈焰刀", tags: ["火", "刀"], rarity: "uncommon", cost: 2, skill: "bladering", attack: 18, cd: 1.1, count: 3, radius: 2.4, traits: { burn: true }, desc: "烈焰刀气扇形横扫，所过成焦。" },
   { id: "t_yehuo", name: "业火天罚", tags: ["火"], rarity: "rare", cost: 3, skill: "rain", attack: 18, cd: 2.8, count: 5, radius: 5.5, traits: { burn: true }, desc: "业火自天倾泻，落处余火焚敌。" },
   { id: "t_yantian", name: "炎天十方阵", tags: ["火", "阵"], rarity: "rare", cost: 3, skill: "radial", attack: 12, cd: 1.9, count: 9, traits: { burn: true }, desc: "炎天火芒九方齐射，灼烧四周。" },
   { id: "t_yunhuo", name: "陨火坠", tags: ["火"], rarity: "epic", cost: 4, skill: "meteor", attack: 30, cd: 2.5, radius: 4.5, traits: { burn: true, knock: true }, desc: "陨火如星砸落，焚震一片。" },
-  { id: "t_chiyanmo", name: "赤焰魔印", tags: ["火", "魔"], rarity: "epic", cost: 4, skill: "forward", attack: 22, cd: 1.0, count: 1, traits: { burn: true, pierce: true }, desc: "赤焰魔印破阵直进，洞穿焚敌。" },
+  { id: "t_chiyanmo", name: "赤焰魔印", tags: ["火", "魔"], rarity: "epic", cost: 4, skill: "spiral", attack: 12, cd: 0.2, count: 1, traits: { burn: true, pierce: true }, desc: "赤焰魔印·斗转焚天，火芒旋射成螺旋、洞穿灼敌。" },
   { id: "t_lihuoyin", name: "离火焚天印", tags: ["火"], rarity: "legendary", cost: 5, skill: "meteor", attack: 34, cd: 2.4, radius: 4.8, traits: { burn: true, knock: true }, desc: "离火神印自天砸落，燎原焚天。" },
   // —— 五行·土（厚土护体·震退地崩）：厚血震退，≥9 ——
   { id: "t_huangtu", name: "黄土灵盾", tags: ["土"], rarity: "common", cost: 1, skill: "aura", attack: 8, cd: 0.6, radius: 2.6, desc: "黄土护体罡气，持续磨伤近敌。" },
@@ -303,22 +306,32 @@ export const TREASURES: Treasure[] = [
   { id: "t_buzhou", name: "不周山印", tags: ["土"], rarity: "legendary", cost: 5, skill: "meteor", attack: 36, cd: 2.4, radius: 4.8, traits: { knock: true }, desc: "不周神山自天镇落，崩天裂地。" },
 ];
 
+export const ALL_TAGS: Tag[] = ["剑", "刀", "仙", "魔", "妖", "体", "雷", "阵", "木", "金", "水", "火", "土"];
+const EXCLUDE_TAG_ID: Record<Tag, string> = { 剑: "jian", 刀: "dao", 仙: "xian", 魔: "mo", 妖: "yao", 体: "ti", 雷: "lei", 阵: "zhen", 木: "mu", 金: "jin", 水: "shui", 火: "huo", 土: "tu" };
+
 export const ARTS: Art[] = [
   { id: "a_gongxin", name: "攻心诀", rarity: "common", cost: 8, desc: "诸般攻击更狠。", mod: { damageMul: 0.1 } },
   { id: "a_jifeng", name: "疾风诀", rarity: "common", cost: 8, desc: "出手更快。", mod: { cdMul: 0.93 } },
-  { id: "a_tuna", name: "吐纳功", rarity: "common", cost: 8, desc: "缓缓回元。", mod: { regen: 0.6 } },
+  { id: "a_tiebushan", name: "铁布衫", rarity: "common", cost: 8, desc: "皮糙肉厚，受创更轻。", mod: { defense: 4 } },
   { id: "a_juling", name: "聚灵诀", rarity: "uncommon", cost: 8, desc: "灵气吸取更广、经验更多。", mod: { pickupRadius: 1.6, xpMul: 0.1 } },
   { id: "a_yufeng", name: "御风步", rarity: "uncommon", cost: 8, desc: "身法更快。", mod: { moveSpeed: 1.0 } },
   { id: "a_budong", name: "不动明王功", rarity: "rare", cost: 14, desc: "气血如山。", mod: { maxHp: 50, defense: 4 } },
-  { id: "a_shixue", name: "噬血大法", rarity: "rare", cost: 14, desc: "见血回元。", mod: { lifesteal: 0.05 } },
+  { id: "a_jiliu", name: "急流诀", rarity: "rare", cost: 14, desc: "身随意动、出手如风。", mod: { cdMul: 0.88, moveSpeed: 0.6 } },
   { id: "a_chongying", name: "多重剑影", rarity: "rare", cost: 16, desc: "投射类武器多一发。", mod: { projectiles: 1 } },
   { id: "a_taixu", name: "太虚大法", rarity: "epic", cost: 24, desc: "范围更大，略增伤。", mod: { area: 0.2, damageMul: 0.06 } },
   { id: "a_shafa", name: "杀伐决断", rarity: "epic", cost: 24, desc: "大幅增伤。", mod: { damageMul: 0.2 } },
-  { id: "a_jinshen", name: "金身不坏", rarity: "legendary", cost: 40, desc: "气血、防御、回元齐飞。", mod: { maxHp: 90, defense: 8, regen: 0.6 } },
+  { id: "a_jinshen", name: "金身不坏", rarity: "legendary", cost: 40, desc: "气血、防御齐飞，刀枪难入。", mod: { maxHp: 110, defense: 11 } },
+  { id: "a_jianbao", name: "鉴宝通玄", rarity: "rare", cost: 14, desc: "市集不再出现你已满级（★3）的法宝，更快凑齐其余法宝。", mod: {}, hideMaxed: true },
+  // 「避·X 诀」：市集不再出现该羁绊法宝——缩小法宝池，集中凑齐其余流派、更快升满星（每个羁绊一件，唯一，售价 50 灵石）
+  ...ALL_TAGS.map((tag): Art => ({
+    id: `a_ex_${EXCLUDE_TAG_ID[tag]}`, name: `避${tag}诀`, rarity: "rare" as Rarity, cost: 50,
+    desc: `市集不再出现【${tag}】系法宝，集中收拢其余流派、更快凑齐升满星。`,
+    mod: {}, excludeTag: tag, price: 50,
+  })),
 ];
 
 export function emptyStats(): Stats {
-  return { damageMul: 0, cdMul: 1, area: 0, maxHp: 0, regen: 0, defense: 0, lifesteal: 0, moveSpeed: 0, pickupRadius: 0, projectiles: 0, xpMul: 0 };
+  return { damageMul: 0, cdMul: 1, area: 0, maxHp: 0, defense: 0, moveSpeed: 0, pickupRadius: 0, projectiles: 0, xpMul: 0 };
 }
 export function emptyFlags(): Flags {
   return { crit: 0, critMul: 2, chainBonus: 0, killExplode: 0, berserk: 0, thorns: 0, auraDps: 0, auraRadius: 0, swordStorm: 0, thunderStorm: 0, shieldInterval: 0, chill: 0, ignite: 0, quakeInterval: 0 };
@@ -329,9 +342,7 @@ function applyMod(t: Stats, m: Modifier) {
   t.cdMul *= m.cdMul ?? 1;
   t.area += m.area ?? 0;
   t.maxHp += m.maxHp ?? 0;
-  t.regen += m.regen ?? 0;
   t.defense += m.defense ?? 0;
-  t.lifesteal += m.lifesteal ?? 0;
   t.moveSpeed += m.moveSpeed ?? 0;
   t.pickupRadius += m.pickupRadius ?? 0;
   t.projectiles += m.projectiles ?? 0;
@@ -425,24 +436,27 @@ export function starterTreasure(): Treasure {
   const base = pool[Math.floor(Math.random() * pool.length)];
   return instantiate(base);
 }
-export function rollTreasures(level: number, n = 5): Treasure[] {
+export function rollTreasures(level: number, n = 5, exclude?: Set<string>, excludeTags?: Set<Tag>): Treasure[] {
+  let pool = exclude && exclude.size ? TREASURES.filter((t) => !exclude.has(t.id)) : TREASURES; // 「鉴宝通玄」：排除已满级法宝
+  if (excludeTags && excludeTags.size) pool = pool.filter((t) => !t.tags.some((tg) => excludeTags.has(tg))); // 「避·X 诀」：排除被屏蔽羁绊的法宝
   const out: Treasure[] = [];
   const seen = new Set<string>();
   let guard = 0;
-  while (out.length < n && guard++ < 80) {
-    const base = pick(TREASURES, rollRarity(level));
+  while (out.length < Math.min(n, pool.length) && guard++ < 200) {
+    const base = pick(pool, rollRarity(level));
     if (seen.has(base.id)) continue;
     seen.add(base.id);
     out.push({ ...base });
   }
   return out;
 }
-export function rollArts(level: number, n = 4): Art[] {
+export function rollArts(level: number, n = 4, owned?: Set<string>): Art[] {
+  const pool = owned && owned.size ? ARTS.filter((a) => !owned.has(a.id)) : ARTS; // 功法唯一：已拥有的不再出现
   const out: Art[] = [];
   const seen = new Set<string>();
   let guard = 0;
-  while (out.length < n && guard++ < 80) {
-    const a = pick(ARTS, rollRarity(level));
+  while (out.length < Math.min(n, pool.length) && guard++ < 80) {
+    const a = pick(pool, rollRarity(level));
     if (seen.has(a.id)) continue;
     seen.add(a.id);
     out.push(a);
@@ -463,7 +477,7 @@ export const RARITY_LABEL: Record<Rarity, string> = { common: "普通", uncommon
 // 五档统一定价（灵石）：普通1 优秀2 精良3 史诗4 传说5
 export const RARITY_COST: Record<Rarity, number> = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
 export function treasureCost(t: Treasure) { return RARITY_COST[t.rarity]; }
-export function artCost(a: Art) { return RARITY_COST[a.rarity]; }
+export function artCost(a: Art) { return a.price ?? RARITY_COST[a.rarity]; }
 
 // 法宝武器信息（市集/背包/底栏展示）
 export function treasureText(t: Treasure): string {
@@ -478,9 +492,7 @@ export function modText(mod: Modifier): string {
     ["cdMul", (v) => `急速${Math.round((1 - v) * 100)}%`],
     ["area", (v) => `范围+${Math.round(v * 100)}%`],
     ["maxHp", (v) => `血+${v}`],
-    ["regen", (v) => `回血+${v}/s`],
     ["defense", (v) => `防${v >= 0 ? "+" : ""}${v}`],
-    ["lifesteal", (v) => `吸血+${Math.round(v * 100)}%`],
     ["moveSpeed", (v) => `移速+${v}`],
     ["pickupRadius", (v) => `拾取+${v}`],
     ["projectiles", (v) => `投射+${v}`],

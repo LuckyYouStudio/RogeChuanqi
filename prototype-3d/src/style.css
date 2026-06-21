@@ -211,12 +211,25 @@ canvas { display: block; touch-action: none; }
   margin-bottom: 16px;
 }
 .offer {
+  position: relative;
   display: flex; flex-direction: column;
   padding: 12px;
   background: rgba(16, 30, 22, 0.9);
   border: 2px solid var(--border);
   border-radius: 12px;
 }
+/* 市集智能提示徽标 + 高亮发光 */
+.offer-badge {
+  position: absolute; top: -8px; left: 8px; z-index: 2;
+  font-size: 10px; font-weight: 800; line-height: 1.5; padding: 1px 7px; border-radius: 8px;
+  color: #0b140d; white-space: nowrap; box-shadow: 0 1px 4px rgba(0, 0, 0, 0.55);
+}
+.offer.rec-merge { box-shadow: 0 0 0 2px var(--gold), 0 0 14px rgba(255, 209, 102, 0.5); }
+.offer.rec-merge .offer-badge { background: var(--gold); }
+.offer.rec-synergy { box-shadow: 0 0 0 2px var(--jade), 0 0 12px rgba(120, 220, 150, 0.45); }
+.offer.rec-synergy .offer-badge { background: var(--jade); }
+.offer.rec-fit { box-shadow: 0 0 0 1.5px var(--jade); }
+.offer.rec-fit .offer-badge { background: var(--jade); opacity: 0.85; }
 .offer-top { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px; }
 .offer-kind { padding: 1px 8px; border-radius: 6px; font-weight: 700; }
 .k-treasure { background: rgba(120, 170, 255, 0.18); color: #9cc6ff; }
@@ -362,36 +375,10 @@ canvas { display: block; touch-action: none; }
 }
 .codex-fab:active { transform: scale(0.94); }
 
-/* 录制按钮 */
-.rec-fab {
-  position: absolute;
-  top: calc(50px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
-  padding: 7px 13px;
-  font-size: 12px; font-weight: 700;
-  color: #ff8a8a;
-  background: var(--panel);
-  border: 1px solid rgba(255, 110, 110, 0.45);
-  border-radius: 10px;
-  pointer-events: auto;
-  cursor: pointer;
-  z-index: 12;
-}
-.rec-fab:active { transform: scale(0.94); }
-.rec-fab.recording {
-  color: #fff;
-  background: rgba(200, 40, 40, 0.85);
-  border-color: #ff5a5a;
-  animation: recPulse 1.1s ease-in-out infinite;
-}
-@keyframes recPulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 70, 70, 0.55); }
-  50% { box-shadow: 0 0 0 6px rgba(255, 70, 70, 0); }
-}
-
 /* 音效开关 */
 .mute-fab {
   position: absolute;
-  top: calc(88px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
+  top: calc(50px + env(safe-area-inset-top)); right: calc(12px + env(safe-area-inset-right));
   width: 38px; height: 34px;
   font-size: 16px; line-height: 1;
   color: var(--jade);
@@ -601,7 +588,7 @@ canvas { display: block; touch-action: none; }
   }
   .shop-actions button { flex: 1 1 30%; min-height: 46px; padding: 12px 8px; font-size: 14px; }
   /* fab 加大点按区域 */
-  .codex-fab, .rec-fab { padding: 9px 14px; font-size: 13px; }
+  .codex-fab { padding: 9px 14px; font-size: 13px; }
 
   /* 图鉴：手机 3 列卡片，名/羁绊/属性自上而下；超高滚动 */
   #codexScreen .shop-box { height: 100dvh; }

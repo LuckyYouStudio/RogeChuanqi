@@ -61,6 +61,7 @@ export const SKILL_FORM_DESC: Record<SkillForm, string> = {
   vine: "自脚下向多方蔓生低速藤鞭，缠滞并磨伤。",
   boomerang: "掷出法轮，划大弧飞出再返回，往返穿击。",
   bladering: "数把旋刃环身高速旋绕、自转切割，触敌即斩；按品阶变换刃形（品阶越高刃越多越炫）。",
+  laser: "向四周固定方向激射数道柱状激光、瞬间发射而出再淡出（不旋转）；品阶越高光柱越多（白2/绿4/蓝6/紫7/橙8）。",
 };
 
 // 法宝详情 HTML（标签解读 / 形态 / 星级缩放 / 特性 / 标签羁绊）
@@ -92,6 +93,7 @@ export function treasureDetailHtml(t: Treasure): string {
   if (tt?.magnet) notes.push("吸附：命中把敌人拉向自身、聚成团。");
   if (t.skill === "sword" || t.skill === "glaive" || t.skill === "lance" || t.skill === "boomerang") notes.push("可穿透多名敌人。");
   if (t.skill === "orbit" || t.skill === "bladering") notes.push("环身常驻，靠近即反复切割。");
+  if (t.skill === "laser") notes.push("向四周固定方向激射光柱，无需索敌、瞬发扫荡，可穿透。");
   if (t.skill === "aura") notes.push("无需索敌，贴身持续生效。");
   if (t.skill === "sigil") notes.push("远程投放，停留数秒持续作用。");
   if (t.count && t.count > 1) notes.push(`一次施放 ${t.count} 发/段。`);

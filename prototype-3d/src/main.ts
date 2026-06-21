@@ -41,6 +41,7 @@ import {
   type Stats,
   type Flags,
   type Rarity,
+  type Tag,
   type TreasureTraits,
 } from "./upgrades";
 
@@ -127,8 +128,8 @@ updateChunks(true); // 开局先在原点周围铺好地面
 
 // ---------- 类型 ----------
 type Enemy = { mesh: THREE.Object3D; hp: number; maxHp: number; speed: number; radius: number; touch: number; touchDmg: number; flash: number; slow: number; elite: boolean; boss: boolean; xp: number; knockX: number; knockZ: number; burnT: number; burnDps: number; dead: boolean };
-type Gem = { mesh: THREE.Object3D; value: number; pulled: boolean; kind: "xp" | "stone" };
-type ProjKind = "straight" | "homing" | "orbit" | "glaive";
+type Gem = { mesh: THREE.Object3D; value: number; pulled: boolean; kind: "xp" | "stone"; life: number };
+type ProjKind = "straight" | "homing" | "orbit" | "glaive" | "beam";
 type Projectile = {
   mesh: THREE.Object3D; kind: ProjKind; base: number; life: number; hit: Set<Enemy>; pierce: boolean;
   dir?: THREE.Vector3; speed?: number; angle?: number; radius?: number; ang?: number; lastHit?: Map<Enemy, number>;
@@ -139,8 +140,8 @@ type Projectile = {
   spin?: number;    // orbit/旋刃：自身旋转角速度（rad/s），刀系旋刃用
   traits?: TreasureTraits; // 命中时生效的行为层特性（减速/灼烧/吸附等）
 };
-type Scroll = { mesh: THREE.Object3D; bob: number };
-type FloorItem = { mesh: THREE.Object3D; kind: "heal" | "magnet" | "bomb"; bob: number };
+type Scroll = { mesh: THREE.Object3D; bob: number; life: number };
+type FloorItem = { mesh: THREE.Object3D; kind: "heal" | "magnet" | "bomb"; bob: number; life: number };
 type Floater = { el: HTMLDivElement; pos: THREE.Vector3; age: number; life: number };
 type Sigil = { pos: THREE.Vector3; radius: number; base: number; tick: number; life: number; owner?: number; traits?: TreasureTraits };
 
@@ -238,7 +239,7 @@ hud.innerHTML = `
       <div class="synergy-panel" id="synergyPanel"></div>
       <div class="shop-actions">
         <button id="synergyBtn">查看羁绊</button>
-        <button id="rerollBtn">刷新 <kbd class="keycap">D</kbd> · ${TUNING.market.rerollCost}灵石</button>
+        <button id="rerollBtn">刷新 <kbd class="keycap">R</kbd> · ${TUNING.market.rerollCost}灵石</button>
         <button id="continueBtn" class="primary">继续历练</button>
       </div>
     </div>
@@ -259,7 +260,6 @@ hud.innerHTML = `
 
   <div class="treasure-bar" id="treasureBar"></div>
   <button class="codex-fab" id="codexFab" title="法宝图鉴">图鉴</button>
-  <button class="rec-fab" id="recFab" title="录制游玩视频（webm）">● 录制</button>
   <button class="mute-fab" id="muteFab" title="音效开关">🔊</button>
   <div class="joystick" id="joystick"><div class="stick" id="stick"></div></div>
 `;
@@ -315,45 +315,6 @@ byId<HTMLButtonElement>("codexBtn").addEventListener("click", openCodex);
 byId<HTMLButtonElement>("codexFab").addEventListener("click", openCodex);
 byId<HTMLButtonElement>("codexCloseBtn").addEventListener("click", closeCodex);
 
-// ---------- 游玩录制（标签页捕获 → 可下载 webm，含完整 HUD，用于宣传素材） ----------
-const recFab = byId<HTMLButtonElement>("recFab");
-let mediaRecorder: MediaRecorder | null = null;
-let recStream: MediaStream | null = null;
-let recChunks: Blob[] = [];
-function setRecBtn(on: boolean) { recFab.textContent = on ? "■ 停止" : "● 录制"; recFab.classList.toggle("recording", on); }
-function stopRecStream() { if (recStream) { recStream.getTracks().forEach((t) => t.stop()); recStream = null; } }
-async function toggleRecord() {
-  if (mediaRecorder && mediaRecorder.state !== "inactive") { mediaRecorder.stop(); return; }
-  const md = navigator.mediaDevices;
-  if (!md || typeof md.getDisplayMedia !== "function" || typeof MediaRecorder === "undefined") { warn("当前浏览器不支持录制"); return; }
-  let stream: MediaStream;
-  // preferCurrentTab 为 Chromium 非标准项：让录制默认锁定本标签页，免去手动挑窗口
-  const displayOpts = { video: { frameRate: 60 }, audio: false, preferCurrentTab: true } as unknown as DisplayMediaStreamOptions;
-  try {
-    stream = await md.getDisplayMedia(displayOpts);
-  } catch { warn("已取消录制"); return; }
-  recStream = stream;
-  const types = ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm"];
-  const mime = types.find((t) => MediaRecorder.isTypeSupported(t)) ?? "";
-  try {
-    mediaRecorder = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 12_000_000 } : undefined);
-  } catch { warn("录制初始化失败"); stopRecStream(); mediaRecorder = null; return; }
-  recChunks = [];
-  mediaRecorder.ondataavailable = (e) => { if (e.data && e.data.size) recChunks.push(e.data); };
-  mediaRecorder.onstop = () => {
-    const blob = new Blob(recChunks, { type: "video/webm" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `xianjie-gameplay-${Date.now()}.webm`; a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 8000);
-    stopRecStream(); setRecBtn(false); warn("录像已保存（webm）");
-  };
-  // 用户在浏览器自带的"停止共享"条上结束时，同步收尾
-  stream.getVideoTracks()[0]?.addEventListener("ended", () => { if (mediaRecorder && mediaRecorder.state !== "inactive") mediaRecorder.stop(); });
-  mediaRecorder.start();
-  setRecBtn(true); warn("开始录制 · 请选「本标签页」");
-}
-recFab.addEventListener("click", () => { void toggleRecord(); });
 // 音效：任意按钮按下即出“点击声”，并借此用户手势初始化音频上下文（浏览器要求手势后才能发声）
 const muteFab = byId<HTMLButtonElement>("muteFab");
 muteFab.textContent = isMuted() ? "🔇" : "🔊";
@@ -388,8 +349,8 @@ window.addEventListener("keydown", (e) => {
   const k = e.key.toLowerCase();
   keys.add(k);
   if (["arrowup", "arrowdown", "arrowleft", "arrowright"].includes(k)) e.preventDefault();
-  // 市集中按 D 刷新法宝（仅首次按下，长按不连刷）
-  if (marketOpen && k === "d" && !e.repeat) { e.preventDefault(); rerollMarket(); }
+  // 市集中按 R 刷新法宝（避开移动键 WASD 的 D；仅首次按下，长按不连刷）
+  if (marketOpen && k === "r" && !e.repeat) { e.preventDefault(); rerollMarket(); }
 });
 window.addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
 
@@ -470,9 +431,22 @@ function gainExp(amount: number) {
   if (leveled) sfxLevelUp(); // 升级/突破音效
   if (leveled && !marketOpen && !artShopOpen) openMarket();
 }
+// 「鉴宝通玄」功法：拥有时，市集排除已满级(★3)的法宝 id
+function maxedExclude(): Set<string> | undefined {
+  if (!arts.some((a) => a.hideMaxed)) return undefined;
+  const s = new Set<string>();
+  for (const t of [...equippedTreasures, ...treasureBag]) if ((t.star ?? 1) >= MAX_STAR) s.add(t.id);
+  return s;
+}
+// 「避·X 诀」功法：拥有时，市集屏蔽这些羁绊的法宝
+function excludedMarketTags(): Set<Tag> | undefined {
+  const s = new Set<Tag>();
+  for (const a of arts) if (a.excludeTag) s.add(a.excludeTag);
+  return s.size ? s : undefined;
+}
 function openMarket() {
   marketOpen = true; pendingEquip = null; synergyOpen = false;
-  marketOffers = rollTreasures(level, TUNING.market.offers);
+  marketOffers = rollTreasures(level, TUNING.market.offers, maxedExclude(), excludedMarketTags());
   addEffect(createPickupBeam(player.position, 0xffd166));
   renderMarket(); marketScreen.classList.add("visible");
 }
@@ -480,7 +454,7 @@ function closeMarket() { marketOpen = false; pendingEquip = null; marketScreen.c
 function rerollMarket() {
   if (spiritStones < TUNING.market.rerollCost) return;
   spiritStones -= TUNING.market.rerollCost;
-  marketOffers = rollTreasures(level, TUNING.market.offers);
+  marketOffers = rollTreasures(level, TUNING.market.offers, maxedExclude(), excludedMarketTags());
   pendingEquip = null; renderMarket(); updateHud();
 }
 function toggleSynergy() { synergyOpen = !synergyOpen; renderMarket(); }
@@ -573,7 +547,7 @@ function refreshSynergy() {
 }
 
 // ---------- 功法商店 ----------
-function openArtShop() { artShopOpen = true; artShopOffers = rollArts(level, TUNING.artShop.offers); renderArtShop(); artShopScreen.classList.add("visible"); }
+function openArtShop() { artShopOpen = true; artShopOffers = rollArts(level, TUNING.artShop.offers, new Set(arts.map((a) => a.id))); renderArtShop(); artShopScreen.classList.add("visible"); }
 function closeArtShop() { artShopOpen = false; artShopScreen.classList.remove("visible"); }
 function buyArt(index: number) {
   const a = artShopOffers[index];
@@ -582,12 +556,13 @@ function buyArt(index: number) {
 }
 
 // ---------- 商店渲染 ----------
-function offerCard(name: string, rarity: Treasure["rarity"], tags: string, desc: string, info: string, btnLabel: string, afford: boolean, onBuy: () => void, kind: "treasure" | "art", iconSvg?: string) {
+function offerCard(name: string, rarity: Treasure["rarity"], tags: string, desc: string, info: string, btnLabel: string, afford: boolean, onBuy: () => void, kind: "treasure" | "art", iconSvg?: string, rec?: { cls: string; badge: string } | null) {
   const card = document.createElement("div");
-  card.className = "offer"; card.style.borderColor = RARITY_COLOR[rarity];
+  card.className = "offer" + (rec ? " " + rec.cls : ""); card.style.borderColor = RARITY_COLOR[rarity];
   const nameHtml = `<div class="offer-name" style="color:${RARITY_COLOR[rarity]}">${name}</div>`;
   const head = iconSvg ? `<div class="offer-head"><span class="offer-ic">${iconSvg}</span>${nameHtml}</div>` : nameHtml;
   card.innerHTML = `
+    ${rec ? `<span class="offer-badge">${rec.badge}</span>` : ""}
     <div class="offer-top">
       <span class="offer-kind ${kind === "treasure" ? "k-treasure" : "k-art"}">${kind === "treasure" ? "法宝" : "功法"}</span>
       <span class="offer-rarity" style="color:${RARITY_COLOR[rarity]}">${RARITY_LABEL[rarity]}</span>
@@ -599,6 +574,27 @@ function offerCard(name: string, rarity: Treasure["rarity"], tags: string, desc:
     <button class="offer-buy" ${afford ? "" : "disabled"}>${btnLabel}</button>`;
   card.querySelector<HTMLButtonElement>(".offer-buy")!.addEventListener("click", onBuy);
   return card;
+}
+// 市集智能提示（规则推荐）：可升星 > 触发羁绊 > 流派契合
+function recommendOffer(t: Treasure): { cls: string; badge: string } | null {
+  // 1) 可升星：已有 ≥2 个同款 ★1（买入即凑 3 自动合成升星）
+  let s1 = 0;
+  for (const x of equippedTreasures) if (x.id === t.id && (x.star ?? 1) === 1) s1++;
+  for (const x of treasureBag) if (x.id === t.id && (x.star ?? 1) === 1) s1++;
+  if (s1 >= 2) return { cls: "rec-merge", badge: "★ 可升星" };
+  // 2) 触发羁绊：买入新法宝(未拥有该 id)后，某标签恰好达到下一档位
+  const owned = equippedTreasures.some((x) => x.id === t.id) || treasureBag.some((x) => x.id === t.id);
+  const status = synergyStatus(equippedTreasures);
+  if (!owned) {
+    for (const tag of t.tags) {
+      const s = status.find((r) => r.tag === tag);
+      if (s && s.tiers.some((ti) => !ti.active && ti.need === s.count + 1)) return { cls: "rec-synergy", badge: `触发${tag}羁绊` };
+    }
+  }
+  // 3) 流派契合：该法宝带有你当前最主流(件数最多)的标签
+  const top = status.reduce((m, s) => Math.max(m, s.count), 0);
+  if (top >= 2 && t.tags.some((tag) => (status.find((r) => r.tag === tag)?.count ?? 0) >= top)) return { cls: "rec-fit", badge: "推荐" };
+  return null;
 }
 function renderMarket() {
   marketLvEl.textContent = String(level);
@@ -612,7 +608,7 @@ function renderMarket() {
   marketOffers.forEach((t, i) => {
     const tags = t.tags.map((x) => `<span>${x}</span>`).join("");
     const c = treasureCost(t);
-    marketOffersEl.appendChild(offerCard(t.name, t.rarity, tags, t.desc, treasureText(t), `购买 · ${c}灵石`, spiritStones >= c, () => buyTreasure(i), "treasure", treasureIconSvg(t)));
+    marketOffersEl.appendChild(offerCard(t.name, t.rarity, tags, t.desc, treasureText(t), `购买 · ${c}灵石`, spiritStones >= c, () => buyTreasure(i), "treasure", treasureIconSvg(t), recommendOffer(t)));
   });
 
   renderSlots(equipSlotsEl, "equip");
@@ -683,9 +679,7 @@ function renderArtShop() {
   artShopOffers.forEach((a, i) => { const c = artCost(a); artOffersEl.appendChild(offerCard(a.name, a.rarity, "", a.desc, modText(a.mod), `参悟 · ${c}灵石`, spiritStones >= c, () => buyArt(i), "art")); });
 }
 function renderArtsStrip() {
-  const counts = new Map<string, { name: string; n: number }>();
-  for (const a of arts) { const c = counts.get(a.id); if (c) c.n += 1; else counts.set(a.id, { name: a.name, n: 1 }); }
-  artsStripEl.innerHTML = Array.from(counts.values()).map((c) => `<span class="art-chip">功·${c.name}${c.n > 1 ? `×${c.n}` : ""}</span>`).join("");
+  artsStripEl.innerHTML = arts.map((a) => `<span class="art-chip">功·${a.name}</span>`).join(""); // 功法唯一，不再叠加显示
 }
 
 // ---------- 法宝图鉴（按羁绊标签分类） ----------
@@ -823,7 +817,7 @@ function applyHitTraits(e: Enemy, tr: TreasureTraits | undefined, base: number) 
   if (tr.magnet) applyPull(e);
 }
 function damageEnemy(e: Enemy, dmg: number, dir: THREE.Vector3, crit = false, canExplode = true) {
-  if (e.dead) return; // 同帧已死敌人不再重复结算（吸血/飘字/二次扣血）
+  if (e.dead) return; // 同帧已死敌人不再重复结算（飘字/二次扣血）
   e.hp -= dmg; e.flash = 0.12;
   if (e.hp > 0) {
     sfxHit(crit); // 命中音效（限流，群体命中不会叠成噪声）
@@ -833,7 +827,6 @@ function damageEnemy(e: Enemy, dmg: number, dir: THREE.Vector3, crit = false, ca
     if (flags.chill > 0) e.slow = Math.max(e.slow, tf.slowDur * (0.8 + 0.2 * flags.chill));
     if (flags.ignite > 0) { e.burnT = Math.max(e.burnT, tf.burnDur); e.burnDps = Math.max(e.burnDps, Math.min(tf.burnDpsCap, dmg * tf.burnDpsFactor * (0.6 + 0.4 * flags.ignite))); }
   }
-  if (stats.lifesteal > 0) heal(dmg * stats.lifesteal);
   spawnFloater(crit ? `${Math.round(dmg)}!` : `${Math.round(dmg)}`, e.mesh.position, crit ? "#ff9a5a" : "#ffe08a", crit ? 0.85 : 0.7);
   if (e.hp <= 0) killEnemy(e, dir, canExplode);
 }
@@ -1031,6 +1024,10 @@ function fireWeapon(t: Treasure) {
       }
       break;
     }
+    case "laser": { // 激光：向四周激射旋转光柱，整体扫一周（柱数由品阶决定）
+      spawnLaser(t.rarity, base, star, (t.radius ?? 7) * area, tr);
+      break;
+    }
     case "whirl": { // 旋身斩：360°全圈瞬斩 + 击退
       const radius = (t.radius ?? 3.2) * area;
       addEffect(createSlashEffect(player.position.clone(), new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y))));
@@ -1187,6 +1184,43 @@ function spawnLance(dir: THREE.Vector3, base: number, star: number, traits?: Tre
   scene.add(mesh);
   projectiles.push({ mesh, kind: "straight", base, life: 0.75, hit: new Set(), pierce: true, dir: dir.clone(), speed: 34, traits });
 }
+// 激光（周天光柱）：向四周【固定方向】激射 N 道柱状激光——快速向外延伸"发射出去"、停顿后淡出（不旋转）；柱数由品阶决定
+const LASER_BEAMS: Record<Rarity, number> = { common: 2, uncommon: 4, rare: 6, epic: 7, legendary: 8 };
+const BEAM_LIFE = 0.55;      // 单次激射总时长（秒）
+const BEAM_EXTEND = 0.12;    // 向外延伸到满射程的用时（"发射"动画）
+const BEAM_FADE = 0.22;      // 末段淡出时长（按剩余寿命收束变细）
+const BEAM_HALF_W = 0.55;    // 光柱半宽（命中判定）
+const G_BEAM_CORE = new THREE.BoxGeometry(0.18, 0.18, 1); // 单位长度沿 +Z，update 每帧按当前长度缩放 z
+const G_BEAM_HALO = new THREE.BoxGeometry(0.5, 0.12, 1);
+const laserMatCache = new Map<Rarity, { core: THREE.MeshStandardMaterial; halo: THREE.MeshStandardMaterial }>();
+function laserMats(rarity: Rarity) {
+  let m = laserMatCache.get(rarity);
+  if (m) return m;
+  const col = new THREE.Color(RARITY_COLOR[rarity]).getHex();
+  m = {
+    core: new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: col, emissiveIntensity: 2.4 }),
+    halo: new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 1.4, transparent: true, opacity: 0.4, depthWrite: false }),
+  };
+  laserMatCache.set(rarity, m);
+  return m;
+}
+function beamMesh(rarity: Rarity) {
+  const { core, halo } = laserMats(rarity);
+  const g = new THREE.Group();
+  g.add(new THREE.Mesh(G_BEAM_CORE, core));
+  g.add(new THREE.Mesh(G_BEAM_HALO, halo));
+  g.scale.set(1, 1, 0.001); // 初始零长，由 update 做"发射"延伸动画
+  return g;
+}
+function spawnLaser(rarity: Rarity, base: number, _star: number, len: number, traits?: TreasureTraits) {
+  const n = LASER_BEAMS[rarity] ?? 4;
+  for (let i = 0; i < n; i++) {
+    if (projectiles.length >= TUNING.maxProjectiles) return;
+    const a = (i / n) * Math.PI * 2; // 固定均分方向，不旋转
+    const mesh = beamMesh(rarity); mesh.position.copy(player.position); mesh.position.y = 1.0; mesh.rotation.y = Math.atan2(Math.sin(a), Math.cos(a)); scene.add(mesh);
+    projectiles.push({ mesh, kind: "beam", base, life: BEAM_LIFE, hit: new Set(), pierce: true, angle: a, radius: len, lastHit: new Map(), traits });
+  }
+}
 function spawnVine(dir: THREE.Vector3, base: number, star: number, traits?: TreasureTraits) {
   if (projectiles.length >= TUNING.maxProjectiles) return;
   const mesh = vineMesh(); mesh.position.copy(player.position); mesh.position.y = 0.8; mesh.lookAt(mesh.position.clone().add(dir));
@@ -1218,7 +1252,7 @@ function spawnFission(parent: Projectile, pos: THREE.Vector3) {
     spawnHomingProj(pos, new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), childBase, star, childFission, 0.82, parent.traits);
   }
 }
-function spawnOrbit(n: number, radius: number, base: number, star: number, owner?: number, traits?: TreasureTraits, bladeRarity?: Rarity) {
+function spawnOrbit(n: number, radius: number, base: number, star: number, owner?: number, traits?: TreasureTraits, bladeRarity?: Rarity, phase = 0) {
   const sc = projStyle(star).scale;
   for (let i = 0; i < n; i++) {
     if (projectiles.length >= TUNING.maxProjectiles) return;
@@ -1227,18 +1261,23 @@ function spawnOrbit(n: number, radius: number, base: number, star: number, owner
     else { const m = new THREE.Mesh(G_ORBIT, projMat(star, "solid")); m.scale.setScalar(sc); mesh = m; }
     scene.add(mesh);
     // 旋刃常驻不消失（life=∞），由 syncBladeRings 在构筑变化时重建；普通环刃仍按 life 存活
-    projectiles.push({ mesh, kind: "orbit", base, life: bladeRarity ? Infinity : 4.2, hit: new Set(), pierce: true, angle: (i / n) * Math.PI * 2, radius, ang: 3.0, lastHit: new Map(), owner, traits, spin });
+    projectiles.push({ mesh, kind: "orbit", base, life: bladeRarity ? Infinity : 4.2, hit: new Set(), pierce: true, angle: (i / n) * Math.PI * 2 + phase, radius, ang: 3.0, lastHit: new Map(), owner, traits, spin });
   }
 }
 // 旋刃常驻：清掉旧环刃后按当前装备的刀法宝重建（无 CD、持续旋转；在 recompute 时调用）
+// 多把刀错开：每把刀一圈同心环（半径递增）+ 相位偏移，避免重叠成一坨
 function syncBladeRings() {
   for (let i = projectiles.length - 1; i >= 0; i--) {
     const p = projectiles[i];
     if (p.kind === "orbit" && p.spin) { scene.remove(p.mesh); projectiles.splice(i, 1); }
   }
+  let k = 0;
   for (const t of equippedTreasures) {
     if (t.skill !== "bladering") continue;
-    spawnOrbit(t.count ?? 3, t.radius ?? 2.6, weaponBase(t), treasureStar(t), t.uid, t.traits, t.rarity);
+    const radius = (t.radius ?? 2.6) + k * 0.75; // 第 k 把刀外扩一圈（同心环，留足间距）
+    const phase = k * 0.7;                        // 起始角错开，刃片交错不齐刷
+    spawnOrbit(t.count ?? 3, radius, weaponBase(t), treasureStar(t), t.uid, t.traits, t.rarity, phase);
+    k++;
   }
 }
 // 旋刃（刀系环刃）：按品阶换模型，平躺于 XZ 面、自身高速旋转 + 环身公转
@@ -1379,17 +1418,18 @@ const ORB_GEO_STONE = new THREE.OctahedronGeometry(0.3, 0);
 const ORB_MAT_XP_BIG = new THREE.MeshStandardMaterial({ color: 0x9cff8f, emissive: 0x2f9a3c, emissiveIntensity: 1.4 });
 const ORB_MAT_XP_SMALL = new THREE.MeshStandardMaterial({ color: 0x9cff8f, emissive: 0x2f9a3c, emissiveIntensity: 1.3 });
 const ORB_MAT_STONE = new THREE.MeshStandardMaterial({ color: 0xffd166, emissive: 0xc88a12, emissiveIntensity: 1.6, metalness: 0.4, roughness: 0.3 });
+const DROP_LIFE = 60; // 掉落物存活上限（秒）：超时未拾取自动清除，防止挂机久了累积卡死
 function spawnOrb(pos: THREE.Vector3, value: number, kind: "xp" | "stone") {
   let geo: THREE.BufferGeometry, mat: THREE.Material;
   if (kind === "stone") { geo = ORB_GEO_STONE; mat = ORB_MAT_STONE; }
   else { const big = value >= 12; geo = big ? ORB_GEO_XP_BIG : ORB_GEO_XP_SMALL; mat = big ? ORB_MAT_XP_BIG : ORB_MAT_XP_SMALL; }
   const mesh = new THREE.Mesh(geo, mat);
   mesh.position.copy(pos); mesh.position.y = 0.5; scene.add(mesh);
-  gems.push({ mesh, value, pulled: false, kind });
+  gems.push({ mesh, value, pulled: false, kind, life: DROP_LIFE });
 }
 function spawnScroll(pos: THREE.Vector3) {
   const mesh = createScrollPickup(); mesh.position.copy(pos); mesh.position.y = 0.6; scene.add(mesh);
-  scrolls.push({ mesh, bob: Math.random() * Math.PI * 2 });
+  scrolls.push({ mesh, bob: Math.random() * Math.PI * 2, life: DROP_LIFE });
 }
 
 // VS 风格地面拾取：回血丹 / 聚灵磁石 / 净世清屏雷（独有网格，拾取时释放资源）
@@ -1412,7 +1452,7 @@ function floorItemMesh(kind: FloorItem["kind"]) {
 }
 function spawnFloorItem(pos: THREE.Vector3, kind: FloorItem["kind"]) {
   const mesh = floorItemMesh(kind); mesh.position.copy(pos); mesh.position.y = 0.6; scene.add(mesh);
-  floorItems.push({ mesh, kind, bob: Math.random() * Math.PI * 2 });
+  floorItems.push({ mesh, kind, bob: Math.random() * Math.PI * 2, life: DROP_LIFE });
 }
 function collectFloorItem(kind: FloorItem["kind"], pos: THREE.Vector3) {
   if (kind === "heal") {
@@ -1495,7 +1535,6 @@ function step(dt: number) {
   updateChunks(); // 按主角位置自动生成/删减地面区块
 
   if (invuln > 0) invuln -= dt;
-  heal(stats.regen * dt);
 
   // 每件法宝按自身 CD 自动施法（旋刃常驻旋转、无 CD，由 syncBladeRings 维护，不在此走 CD）
   for (const t of equippedTreasures) {
@@ -1584,6 +1623,24 @@ function updateProjectiles(dt: number) {
         const rr = e.radius + 0.95;
         if (e.mesh.position.distanceToSquared(p.mesh.position) <= rr * rr) { p.hit.add(e); const rc = critRoll(p.base); damageEnemy(e, rc.dmg, p.dir!, rc.crit); applyHitTraits(e, p.traits, p.base); }
       });
+    } else if (p.kind === "beam") { // 激光柱：固定方向、快速向外延伸"发射"、末段淡出收束（不旋转），沿光柱直线判定命中
+      p.life -= dt;
+      const age = BEAM_LIFE - p.life;
+      const grow = Math.min(1, age / BEAM_EXTEND);
+      const len = p.radius! * (1 - (1 - grow) * (1 - grow)); // easeOut 向外激射
+      const dx = Math.sin(p.angle!), dz = Math.cos(p.angle!);
+      const wide = p.life < BEAM_FADE ? Math.max(0.05, p.life / BEAM_FADE) : 1; // 末段收束变细 = 淡出
+      p.mesh.position.set(player.position.x + dx * len * 0.5, 1.0, player.position.z + dz * len * 0.5);
+      p.mesh.scale.set(wide, wide, Math.max(0.001, len));
+      forEnemiesNear(player.position.x, player.position.z, len, (e) => {
+        if (e.dead) return;
+        const rx = e.mesh.position.x - player.position.x, rz = e.mesh.position.z - player.position.z;
+        const proj = rx * dx + rz * dz; // 沿光柱方向的投影（须在 0..len 内）
+        if (proj < 0 || proj > len) return;
+        if (Math.abs(rx * dz - rz * dx) > BEAM_HALF_W + e.radius) return; // 离光柱中线的垂距
+        const lastT = p.lastHit!.get(e) ?? -1;
+        if (runTime - lastT >= 0.15) { p.lastHit!.set(e, runTime); _beamDir.set(dx, 0, dz); const rc = critRoll(p.base); damageEnemy(e, rc.dmg, _beamDir, rc.crit); applyHitTraits(e, p.traits, p.base); }
+      });
     } else { // orbit / 旋刃
       p.angle! += p.ang! * dt;
       p.mesh.position.set(player.position.x + Math.cos(p.angle!) * p.radius!, 1.0, player.position.z + Math.sin(p.angle!) * p.radius!);
@@ -1620,6 +1677,7 @@ function updateSigils(dt: number) {
 
 const _em = new THREE.Vector3();
 const _homeDir = new THREE.Vector3(); // 追踪子弹索敌方向的复用临时向量
+const _beamDir = new THREE.Vector3(); // 激光柱命中方向的复用临时向量
 function updateEnemies(dt: number) {
   for (const e of enemies) {
     if (e.dead) continue;
@@ -1652,7 +1710,10 @@ function updateGems(dt: number) {
   const pull = TUNING.xp.pickupBase + stats.pickupRadius;
   const pull2 = pull * pull;
   for (let i = gems.length - 1; i >= 0; i--) {
-    const g = gems[i]; const distSq = g.mesh.position.distanceToSquared(player.position);
+    const g = gems[i];
+    g.life -= dt;
+    if (g.life <= 0) { scene.remove(g.mesh); gems.splice(i, 1); continue; } // 超时清除（灵力球用共享资源，仅移除不 dispose）
+    const distSq = g.mesh.position.distanceToSquared(player.position);
     if (distSq <= pull2) g.pulled = true;
     if (g.pulled) {
       _em.copy(player.position); _em.y = 0.5; g.mesh.position.lerp(_em, Math.min(1, dt * 9));
@@ -1668,7 +1729,8 @@ function updateGems(dt: number) {
 }
 function updateScrolls(dt: number) {
   for (let i = scrolls.length - 1; i >= 0; i--) {
-    const s = scrolls[i]; s.bob += dt * 3;
+    const s = scrolls[i]; s.bob += dt * 3; s.life -= dt;
+    if (s.life <= 0) { scene.remove(s.mesh); disposeObject(s.mesh); scrolls.splice(i, 1); continue; } // 超时清除
     s.mesh.position.y = 0.6 + Math.sin(s.bob) * 0.12; s.mesh.rotation.y += dt * 1.6;
     if (s.mesh.position.distanceToSquared(player.position) <= 1.4 * 1.4) {
       addEffect(createPickupBeam(s.mesh.position.clone(), 0x9ddcff)); scene.remove(s.mesh); disposeObject(s.mesh); scrolls.splice(i, 1); openArtShop(); return;
@@ -1677,7 +1739,8 @@ function updateScrolls(dt: number) {
 }
 function updateFloorItems(dt: number) {
   for (let i = floorItems.length - 1; i >= 0; i--) {
-    const it = floorItems[i]; it.bob += dt * 3;
+    const it = floorItems[i]; it.bob += dt * 3; it.life -= dt;
+    if (it.life <= 0) { scene.remove(it.mesh); disposeObject(it.mesh); floorItems.splice(i, 1); continue; } // 超时清除
     it.mesh.position.y = 0.6 + Math.sin(it.bob) * 0.12; it.mesh.rotation.y += dt * 1.8;
     if (it.mesh.position.distanceToSquared(player.position) <= 1.5 * 1.5) {
       collectFloorItem(it.kind, it.mesh.position.clone());

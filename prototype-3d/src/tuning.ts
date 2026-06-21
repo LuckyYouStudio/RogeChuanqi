@@ -8,19 +8,20 @@ export const TUNING = {
   combat: { targetRange: 18 },
 
   enemy: {
-    spawnStart: 1.1, spawnMin: 0.2, spawnRampSec: 170, countEverySec: 55,
-    // 血量随时间：线性(/hpRampSec) + 后期二次加速((t/hpRampQuad)²)，越打越肉
-    hpBase: 13, hpRampSec: 58, hpRampQuad: 160,
-    speedBase: 3.0, speedRampMax: 1.8, speedRampSec: 170,
-    // 攻击随时间提升：dmgMul = min(dmgRampMax, 1 + t/dmgRampSec)
-    touchDamage: 8, touchCd: 0.6, dmgRampSec: 100, dmgRampMax: 6,
-    eliteHpBase: 70, eliteSpeed: 2.4, eliteTouchDamage: 15,
-    eliteChanceRampSec: 600, eliteChanceMax: 0.22,
-    maxAlive: 160,
+    // 刷怪更快更密：开局更短间隔、更快达到上限、更早出现多只齐刷
+    spawnStart: 0.95, spawnMin: 0.14, spawnRampSec: 130, countEverySec: 42,
+    // 血量随时间：线性(/hpRampSec) + 后期二次加速((t/hpRampQuad)²)，越打越肉（整体上调）
+    hpBase: 15, hpRampSec: 48, hpRampQuad: 135,
+    speedBase: 3.0, speedRampMax: 2.1, speedRampSec: 150,
+    // 攻击随时间提升：dmgMul = min(dmgRampMax, 1 + t/dmgRampSec)（更快爬升、更高封顶）
+    touchDamage: 9, touchCd: 0.6, dmgRampSec: 85, dmgRampMax: 7,
+    eliteHpBase: 85, eliteSpeed: 2.4, eliteTouchDamage: 18,
+    eliteChanceRampSec: 440, eliteChanceMax: 0.3,
+    maxAlive: 200,
   },
   // 击退（吸血鬼幸存者手感）：受击沿"远离玩家"方向被弹开，按质量缩放，逐帧衰减
   knockback: { base: 7, decay: 11, critMul: 1.7, massElite: 2.4, massBoss: 7 },
-  boss: { intervalSec: 95, hpBase: 340, hpPerBoss: 240, hpRampSec: 210, speed: 2.0, xpBase: 55, xpPerBoss: 18 },
+  boss: { intervalSec: 80, hpBase: 400, hpPerBoss: 285, hpRampSec: 210, speed: 2.0, xpBase: 55, xpPerBoss: 18 },
   xp: { normal: 3, elite: 12, pickupBase: 2.4, expBase: 18, perLevel: 10, quad: 1.6, firstLevel: 20 },
 
   maxTreasures: 10,

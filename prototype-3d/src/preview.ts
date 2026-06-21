@@ -158,6 +158,7 @@ export function createSkillPreview(container: HTMLElement): SkillPreview {
       case "rain": for (let i = 0; i < 5; i++) { const a = Math.random() * Math.PI * 2, r = Math.random() * 3; addFx(createThunderStrike(new THREE.Vector3(Math.cos(a) * r, 0, Math.sin(a) * r), 1)); } break;
       case "arc": addFx(createQingyuanHitBurst(new THREE.Vector3(0, 0, -1.6), new THREE.Vector3(0, 0, -1), true, 1)); break;
       case "lance": spawnBlade(M_BLADE, hdir(targets[0].position), 16, 1.2); break;
+      case "laser": for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; spawnBlade(M_BLADE, new THREE.Vector3(Math.cos(a), 0, Math.sin(a)), 16, 1.2); } break;
       case "whirl": for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2, d = new THREE.Vector3(Math.cos(a), 0, Math.sin(a)); addFx(createQingyuanHitBurst(d.clone().multiplyScalar(2.2), d, true, 1)); } break;
       case "meteor": addFx(createThunderStrike(targets[3].position.clone(), 3)); addFx(createBindingField(targets[3].position.clone(), 2.6, 2)); break;
       case "sigil": addFx(createBindingField(new THREE.Vector3(0, 0, -1.5), 2.2, 1)); break;
